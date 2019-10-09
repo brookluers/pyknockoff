@@ -105,12 +105,12 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
         Sigma = gen.get_2block(p, rho)
     else:
         Sigma = gen.get_exch(p, rho)
-    print("population cov(X): ")
+    print("cov(X): ")
     np.set_printoptions(precision=3, suppress=True)
     print(Sigma)
     SigmaChol = np.linalg.cholesky(Sigma)
     genYfunc = lambda X, N: gen.gen_Y(X, N, beta)
-    rslt = []
+
     W_s_names = [(wnames[r1], snames[r2])
              for r1 in range(len(wnames)) for r2 in range(nstypes)]
     if offset == 1:
@@ -120,16 +120,13 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     else:
         print("offset must be 0 or 1, setting to 1")
         offset = 1
+    rslt = []
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, Rx = scipy.linalg.qr(X, mode='economic')
         G = np.dot(X.T, X)
-        print("X^t X = ")
-        print(G)
         Ginv = scipy.linalg.inv(G)
         slist = [sfunc_d[stype](G) for stype in sfunc_d]
-        print("slist = ")
-        print(slist)
         cmlist = [ko.get_cmat(X, sv, Ginv) for sv in slist]
         for jyx in range(nsim_yx):
             Y = genYfunc(X, N)
