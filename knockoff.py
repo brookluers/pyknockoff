@@ -70,7 +70,7 @@ def stat_crossprod(X, Xk, Y):
 
 def knockoff_threshold(Wstat, q, offset):
     p = len(Wstat)
-    Wabs = np.sort([a for a in map(abs, Wstat)])
+    Wabs = np.sort(np.abs(Wstat))
     ok_ix = []
     for j in range(p):
         thresh = Wabs[j]
@@ -94,6 +94,8 @@ def doKnockoff(X, Y, q, offset=1,
         xnorms = scipy.linalg.norm(X, axis=0)
         X = X / xnorms
     G = np.dot(X.T, X)
+    Qx, _ = scipy.linalg.qr(X, mode='economic')
+    Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p)
     if stype == 'ldet':
         svec = get_svec_ldet(G)
     elif stype == 'equi':
@@ -101,25 +103,25 @@ def doKnockoff(X, Y, q, offset=1,
     else:
         svec = get_svec_ldet(G)
     if wstat == 'ols':
-        wfunc = stat_ols
+        W = stat_ols(X, Xtilde, Y)
+    elif wstat=='crossprod':
+        W = stat_crossprod(X, Xtilde, Y)
     else:
-        wstat = stat_crossprod
-    Qx, _ = scipy.linalg.qr(X, mode='economic')
-    Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p)
-    W = wfunc(X, Xtilde, Y)
+        W = stat_crossprod(X, Xtilde, Y)
     thresh = knockoff_threshold(W, q, offset)
     sel = [W[j] >= thresh for j in range(p)]
     return sel
 
 def get_cmat(X, svec, Ginv=None, tol=1e-7):
     if Ginv is None:
-        Ginv = scipy.linalg.solve(G)
-    Ginv_S = Ginv * svec
-    Smat = np.diag(svec)
-    CtC = 2 * Smat - np.matmul(Smat, Ginv_S)
+        Ginv = scipy.linalg.inv(G)
+    CtC = Ginv * -np.outer(svec, svec)   # - S Ginv S
+    i, j = np.diag_indices(Ginv.shape[0])
+    CtC[i, j] += 2 * svec
+    # CtC_old = 2 * Smat - np.matmul(Smat, Ginv_S)
     w, v = scipy.linalg.eigh(CtC)
     w[abs(w) < tol] = 0
-    Cmat = np.diag(np.sqrt(w)).dot(v.T)
+    Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
 def getknockoffs_qr(X, G, svec, Qx,
@@ -127,7 +129,7 @@ def getknockoffs_qr(X, G, svec, Qx,
     if Utilde is None:
         Utilde = get_util_random(Qx, N, p)
     if Ginv is None:
-        Ginv = scipy.linalg.solve(G)
+        Ginv = scipy.linalg.inv(G)
     if Cmat is None:
         Cmat = get_cmat(X, svec, Ginv)
     Ginv_S = Ginv * svec

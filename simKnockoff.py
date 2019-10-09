@@ -50,7 +50,7 @@ def one_rslt(Utilde, W, Y, p, FDR, ppv, tpr, fdp, fpr, offset=1):
     ret.update({"sel{:d}".format(i): 1 * sel[i] for i in range(p)})
     return ret
 
-def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'], wtypes = ['ols', 'crossprod'], utypes = ['utheta', 'util_rand'], scale=True, center=True, fixGram = False):
+def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'], wtypes = ['ols', 'crossprod'], utypes = ['utheta', 'util_rand'], scale=True, center=True, fixGram = False, to_csv = True):
     sfunc_d = {}
     for stype in stypes:
         if stype == 'equi':
@@ -111,13 +111,15 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
         print("offset must be 0 or 1, setting to 1")
         offset = 1
     for jx in range(nsim_x):
-        X = gen.gen_X(N, p, SigmaChol, scale, center)
+        X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, _ = scipy.linalg.qr(X, mode='economic')
         G = np.dot(X.T, X)
         print("X^t X = ")
         print(G)
         Ginv = scipy.linalg.inv(G)
         slist = [sfunc_d[stype](G) for stype in sfunc_d]
+        print("slist = ")
+        print(slist)
         cmlist = [ko.get_cmat(X, sv, Ginv) for sv in slist]
         for jyx in range(nsim_yx):
             Y = genYfunc(X, N)
@@ -130,7 +132,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
                              for wtype in wfunc_d for
                              Xk in Xtlist]
                     res_byW = [one_rslt(Ut, wvec, Y, p, FDR,
-                                    ppv, tpr, fdp, fpr) for wvec in Wlist]
+                                    ppv, tpr, fdp, fpr, offset) for wvec in Wlist]
                     for wr_ix in range(len(res_byW)):
                         res_byW[wr_ix].update({
                         'juyx': juyx, 'jyx': jyx, 'jx': jx,
@@ -141,7 +143,12 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
                         'offset': offset
                         })
                     rslt.append(res_byW)
-    return rslt
+
+    df = pd.concat([pd.DataFrame(rj) for rj in rslt])
+    if to_csv:
+        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}.csv".format(n,p,r,offset), index=False)
+    return df
+
 
 if __name__ == "__main__":
 
@@ -164,8 +171,9 @@ if __name__ == "__main__":
     offset = 0
     k = p//2
     nsim_x = 1
-    nsim_yx = 1
-    nsim_uyx = 1000
-    rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target, offset=offset, corstr='2block', betatype='firsthalf', stypes=['equi'], wtypes=['ols','crossprod'], utypes=['util_rand'], fixGram=True, center=False, scale=False)
-    df = pd.concat([pd.DataFrame(rj) for rj in rslt])
-    df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-2block-firsthalf-N{:d}-p{:d}-rho{:.2f}-off{:d}.csv".format(nsim_x, nsim_yx,nsim_uyx,n, p, r, offset), index=False)
+    nsim_yx = 1000
+    nsim_uyx = 1
+    rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
+            offset=offset, corstr='2block',
+            betatype='firsthalf', stypes=['equi'], wtypes=['ols','crossprod'], utypes=['util_rand'],
+            fixGram=True, center=False, scale=False)
