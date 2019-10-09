@@ -30,7 +30,7 @@ def get_fprfunc(beta, tol=1e-8):
     p = beta.shape[0]
     k = np.sum(abs_beta > tol)
     def f(sel):
-        return np.sum(abs_beta < tol) / (p - k)
+        return np.sum(abs_beta[sel] < tol) / (np.sum(abs_beta[sel] < tol) + p - k)
     return f
 
 
@@ -50,7 +50,13 @@ def one_rslt(Utilde, W, Y, p, FDR, ppv, tpr, fdp, fpr, offset=1):
     ret.update({"sel{:d}".format(i): 1 * sel[i] for i in range(p)})
     return ret
 
-def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'], wtypes = ['ols', 'crossprod'], utypes = ['utheta', 'util_rand'], scale=True, center=True, fixGram = False, to_csv = True):
+def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
+            effsize, FDR, offset=1, corstr='exch', betatype='flat',
+            stypes = ['equi', 'ldet'], wtypes = ['ols', 'crossprod'],
+            utypes = ['utheta', 'util_rand'],
+            scale=True, center=True,
+            target_ufrac = None,
+             fixGram = False, to_csv = True):
     sfunc_d = {}
     for stype in stypes:
         if stype == 'equi':
@@ -63,6 +69,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
     for utype in utypes:
         if utype == 'util_rand':
             utfunc_d[utype] = ko.get_util_random
+        elif utype == 'utheta':
+            tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 250)
+            print("Target fraction of UUY variance: {:.3f}".format(target_ufrac))
+            utfunc_d[utype] = lambda Qx, N, p, Y, Rx: ko.get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq, target_ufrac)
     nutypes = len(utfunc_d)
     utnames = list(utfunc_d.keys())
     wfunc_d = {}
@@ -112,7 +122,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
         offset = 1
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
-        Qx, _ = scipy.linalg.qr(X, mode='economic')
+        Qx, Rx = scipy.linalg.qr(X, mode='economic')
         G = np.dot(X.T, X)
         print("X^t X = ")
         print(G)
@@ -124,7 +134,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho, effsize, FDR, offset=1, corst
         for jyx in range(nsim_yx):
             Y = genYfunc(X, N)
             for juyx in range(nsim_uyx):
-                Utlist = [utfunc_d[utype](Qx, N, p) for utype in utfunc_d]
+                Utlist = [utfunc_d[utype](Qx, N, p, Y, Rx) for utype in utfunc_d]
                 for ut_ix in range(nutypes):
                     Ut = Utlist[ut_ix]
                     Xtlist = [ko.getknockoffs_qr(X, G, slist[r], Qx, N, p, Ut, Ginv, cmlist[r]) for r in range(nstypes)]
@@ -175,5 +185,6 @@ if __name__ == "__main__":
     nsim_uyx = 1
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
             offset=offset, corstr='2block',
-            betatype='firsthalf', stypes=['equi'], wtypes=['ols','crossprod'], utypes=['util_rand'],
-            fixGram=True, center=False, scale=False)
+            betatype='firsthalf', stypes=['equi', 'ldet'], wtypes=['ols','crossprod'], utypes=['util_rand', 'utheta'],
+            fixGram=True, center=False, scale=False,
+            target_ufrac = p / (n-p))

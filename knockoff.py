@@ -3,7 +3,7 @@ from scipy.optimize import minimize
 import scipy.linalg
 
 
-def get_ldetfun(Sigma, tol=1e-16):
+def get_ldetfun(Sigma, tol=1e-10):
     def f(svec):
         W = 2 * Sigma - np.diag(svec)
         Wev = np.linalg.eigvalsh(W)
@@ -31,31 +31,68 @@ def get_svec_ldet(G):
     ldetf = get_ldetfun(G)
     ldetgrad = get_ldetgrad(G)
     pdim = G.shape[0]
-    #print("Maximizing log-determinant of augmented Gram matrix")
-    #print("\tInitial steps without using gradient...")
     init_opt = minimize(lambda x: -ldetf(x),
                 x0=np.random.uniform(0.0,0.003,size=pdim),
                 constraints=scipy.optimize.LinearConstraint(np.identity(pdim),lb=0,ub=1.0),
                 options = {'maxiter': 10})
-    #print("\tGradient-based maximization with starting value\n\t")
-    #print(init_opt.x)
     ldopt = minimize(lambda x: -ldetf(x),
             x0 = init_opt.x,
             jac = lambda x: -ldetgrad(x),
             options={"maxiter": 25000},
             tol = 1e-10,
             constraints = scipy.optimize.LinearConstraint(np.identity(pdim),lb=0,ub=1.0))
-    #print("Final steps using gradient...")
-    #print("\tresult: \n\t" +
-    #        ldopt.message + "\n\tfunciton value: " + str(ldopt.fun) + "\n\tnit = " + str(ldopt.nit) + "\n\tsolution: " + str(ldopt.x))
     svec = ldopt.x
     return svec
 
-def get_util_random(Qx, N, p):
+def get_util_random(Qx, N, p, *args):
     Utilde_raw = np.random.normal(size = (N, p))
     Utilde_raw = Utilde_raw - np.matmul(Qx, np.dot(Qx.T, Utilde_raw))
     Utilde, _ = scipy.linalg.qr(Utilde_raw, mode='economic')
     return Utilde
+
+def norm2_utheta_y(theta, ut1, ut2, Y):
+    utheta = [np.sin(tj) * ut1 + np.cos(tj) * ut2 for tj in theta]
+    return [scipy.linalg.norm(np.dot(utj, np.dot(utj.T,Y)))**2 for utj in utheta]
+
+
+def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None):
+    if tseq is None:
+        tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 250)
+    y2n = np.sum(Y**2)
+    QtY = np.dot(Qx.T, Y)
+    Yresid = Y - np.dot(Qx, QtY)
+    if target_frac is None:
+        G = np.dot(Rx.T, Rx)
+        bhat = scipy.linalg.solve_triangular(Rx, QtY)
+        sig2hat = np.sum(Yresid**2) / (N - p)
+        target_frac = (sig2hat * p) / ((N-p) * sig2hat + np.dot(np.dot(bhat, G), bhat))
+    Yresid /= np.sqrt(np.sum(Yresid**2))
+
+    ut1 = get_util_random(Qx, N, p)
+    Q_xuy, _ = scipy.linalg.qr(np.concatenate((ut1, Yresid[:, None], Qx), axis=1), mode='economic')
+    Q_xu, _ = scipy.linalg.qr(np.concatenate((ut1, Qx), axis=1), mode='economic')
+
+    ut2 = np.random.normal(size = (N, p))
+    ut2 -= np.dot(Q_xuy, np.dot(Q_xuy.T, ut2))
+    ut2, _ = scipy.linalg.qr(ut2, mode='economic')
+
+    ut3 = np.concatenate((Yresid[:, None], np.random.normal(size = (N, p - 1))), axis=1)
+    ut3 -= np.dot(Q_xu, np.dot(Q_xu.T, ut3))
+    ut3, _ = scipy.linalg.qr(ut3, mode='economic')
+
+    frac2 = norm2_utheta_y(tseq, ut1, ut2, Y) / y2n
+    frac3 = norm2_utheta_y(tseq, ut1, ut3, Y) / y2n
+    fd2 = np.abs(frac2 - target_frac)
+    fd3 = np.abs(frac3 - target_frac)
+    imin2 = fd2.argmin()
+    imin3 = fd3.argmin()
+    if fd3[imin3] < fd2[imin2]:
+        theta = tseq[imin3]
+        ut_other = ut3
+    else:
+        theta = tseq[imin2]
+        ut_other = ut2
+    return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
 def stat_ols(X, Xk, Y):
     p = X.shape[1]
