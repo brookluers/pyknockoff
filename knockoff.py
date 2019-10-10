@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, Bounds
 import scipy.linalg
 
 
@@ -33,14 +33,16 @@ def get_svec_ldet(G):
     pdim = G.shape[0]
     init_opt = minimize(lambda x: -ldetf(x),
                 x0=np.random.uniform(0.0,0.003,size=pdim),
-                constraints=scipy.optimize.LinearConstraint(np.identity(pdim),lb=0,ub=1.0),
+                method='L-BFGS-B',
+                bounds = Bounds(0.0, 1.0),
                 options = {'maxiter': 10})
     ldopt = minimize(lambda x: -ldetf(x),
             x0 = init_opt.x,
+            method='L-BFGS-B',
             jac = lambda x: -ldetgrad(x),
             options={"maxiter": 25000},
             tol = 1e-10,
-            constraints = scipy.optimize.LinearConstraint(np.identity(pdim),lb=0,ub=1.0))
+            bounds = Bounds(0.0, 1.0))
     svec = ldopt.x
     return svec
 
