@@ -57,6 +57,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             scale=True, center=True,
             target_ufrac = None,
              fixGram = False, to_csv = True):
+    print("\n---------\n")
     sfunc_d = {}
     for stype in stypes:
         if stype == 'equi':
@@ -71,7 +72,11 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             utfunc_d[utype] = ko.get_util_random
         elif utype == 'utheta':
             tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 250)
-            print("Target fraction of UUY variance: {:.3f}".format(target_ufrac))
+            if target_ufrac is None:
+                print("Target fraction of UUY variance:")
+                print("\that(sigma^2)*p / ((N-p)*hat(sigma^2) + bhat^t G bhat)")
+            else:
+                print("Target fraction of UUY variance: {:.3f}".format(target_ufrac))
             utfunc_d[utype] = lambda Qx, N, p, Y, Rx: ko.get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq, target_ufrac)
     nutypes = len(utfunc_d)
     utnames = list(utfunc_d.keys())
@@ -99,15 +104,16 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     else:
         genXfunc = gen.gen_X
     if corstr == 'exch':
+        print("Exchangeable covariance matrix")
         Sigma = gen.get_exch(p, rho)
     elif corstr == '2block':
         print("Using '2block' covariance matrix")
         Sigma = gen.get_2block(p, rho)
     else:
         Sigma = gen.get_exch(p, rho)
-    print("cov(X): ")
+    print("cov(X)[0:5, 0:5]: ")
     np.set_printoptions(precision=3, suppress=True)
-    print(Sigma)
+    print(Sigma[0:5, 0:5])
     SigmaChol = np.linalg.cholesky(Sigma)
     genYfunc = lambda X, N: gen.gen_Y(X, N, beta)
 
@@ -153,7 +159,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 
     df = pd.concat([pd.DataFrame(rj) for rj in rslt])
     if to_csv:
-        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}.csv".format(n,p,r,offset), index=False)
+        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}.csv".format(N, p, rho, offset), index=False)
     return df
 
 
