@@ -152,6 +152,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                         res_byW[wr_ix].update({
                         'juyx': juyx, 'jyx': jyx, 'jx': jx,
                         'N': N, 'p': p, 'k': k, 'FDR': FDR,
+                        'rho': rho, 'corstr': corstr,
                         'utype': utnames[ut_ix],
                         'wstat': W_s_names[wr_ix][0],
                         'stype': W_s_names[wr_ix][1],
