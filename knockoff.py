@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds
 import scipy.linalg
+from sklearn.linear_model import LassoCV
 
 
 def get_ldetfun(Sigma, tol=1e-10):
@@ -96,6 +97,19 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
+def stat_lasso_coef(X, Xk, Y, n_alphas = 200):
+    p = X.shape[1]
+    N = X.shape[0]
+    XXk = np.concatenate((X, Xk), axis=1)
+    cp = np.dot(XXk.T, Y)
+    alpha_max = max(np.abs(cp)) # ? divide by N here ?
+    alpha_min = alpha_max / 1000
+    k = np.linspace(0, n_alphas - 1, n_alphas) / n_alphas
+    alphas = alpha_max * (alpha_min / alpha_max)**k
+    lfit = LassoCV(cv=5, alphas=alphas, max_iter = 5000).fit(XXk, Y)
+    b = lfit.coef_
+    return [abs(b[i]) - abs(b[i + p]) for i in range(p)]
+
 def stat_ols(X, Xk, Y):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
@@ -145,6 +159,8 @@ def doKnockoff(X, Y, q, offset=1,
         W = stat_ols(X, Xtilde, Y)
     elif wstat=='crossprod':
         W = stat_crossprod(X, Xtilde, Y)
+    elif wstat == 'lasso_coef':
+        W = stat_lasso_coef(X, Xtilde, Y)
     else:
         W = stat_crossprod(X, Xtilde, Y)
     thresh = knockoff_threshold(W, q, offset)

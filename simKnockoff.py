@@ -86,6 +86,8 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             wfunc_d[wtype] = ko.stat_ols
         elif wtype == 'crossprod':
             wfunc_d[wtype] = ko.stat_crossprod
+        elif wtype == 'lasso_coef':
+            wfunc_d[wtype] = ko.stat_lasso_coef
     wnames = list(wfunc_d.keys())
     if betatype == 'flat':
         beta = gen.rand_beta_flat(p, k, effsize)

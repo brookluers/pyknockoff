@@ -13,10 +13,10 @@ def parSim_withseed(arg_dict):
 if __name__ == "__main__":
 
     # Sample size
-    N = 500
+    N = 5000
 
     # Number of features
-    p = 6
+    p = 40
 
     # Test sequence of correlation values
     rhotest = [0.2, 0.4, 0.6, 0.8]
@@ -34,8 +34,8 @@ if __name__ == "__main__":
 
     offsets = [0, 1]
     k = p//2
-    nsim_x = 1
-    nsim_yx = 1000
+    nsim_x = 1000
+    nsim_yx = 1
     nsim_uyx = 1
     parlist = [{'nsim_x': nsim_x,
       'nsim_yx': nsim_yx,
@@ -48,8 +48,7 @@ if __name__ == "__main__":
       'corstr': cs, 'betatype': bt,
       'stypes': ['equi','ldet'],
       'wtypes': ['crossprod', 'lasso_coef'],
-      'utypes': ['utheta','util_rand'],
-      'fixGram': True
+      'utypes': ['utheta','util_rand']
     } for rho in rhotest for (cs, bt) in zip(corstr_test, betatype_test) for os in offsets]
     for j in range(len(parlist)):
         parlist[j].update({'seed': j})
