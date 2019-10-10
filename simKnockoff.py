@@ -159,7 +159,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 
     df = pd.concat([pd.DataFrame(rj) for rj in rslt])
     if to_csv:
-        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}.csv".format(N, p, rho, offset), index=False)
+        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}-fixGram".format(N, p, rho, offset) + str(fixGram) + ".csv", index=False)
     return df
 
 
