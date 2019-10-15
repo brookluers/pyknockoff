@@ -33,6 +33,13 @@ def get_fprfunc(beta, tol=1e-8):
         return np.sum(abs_beta[sel] < tol) / (np.sum(abs_beta[sel] < tol) + p - k)
     return f
 
+def power_method(A, p, startvec, niter=10):
+    ek = startvec
+    for _ in range(niter):
+        ek1 = np.dot(A, ek)
+        ek1_norm = np.linalg.norm(ek1)
+        ek = ek1 / ek1_norm
+    return np.dot(np.dot(ek.T, A), ek)
 
 def one_rslt(Utilde, W, Y, p, FDR, ppv, tpr, fdp, fpr, offset=1):
     thresh = ko.knockoff_threshold(W, FDR, offset)
@@ -61,9 +68,9 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     sfunc_d = {}
     for stype in stypes:
         if stype == 'equi':
-            sfunc_d[stype] = ko.get_svec_equi
+            sfunc_d[stype] = lambda G, minEV: ko.get_svec_equi(G, minEV=minEV)
         elif stype == 'ldet':
-            sfunc_d[stype] = ko.get_svec_ldet
+            sfunc_d[stype] = lambda G, minEV: ko.get_svec_ldet(G, minEV = minEV)
     nstypes = len(sfunc_d)
     snames = list(sfunc_d.keys())
     utfunc_d = {}
@@ -128,13 +135,23 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     else:
         print("offset must be 0 or 1, setting to 1")
         offset = 1
+
+    # Use power iterations to approximate
+    # the smallest eigenvalue of X^t X
+    # use for log-det and equivariant
+    # tuning of S
+    rand_unit = np.random.normal(size=(p,))
+    rand_unit = rand_unit / np.linalg.norm(rand_unit)
+
     rslt = []
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, Rx = scipy.linalg.qr(X, mode='economic')
-        G = np.dot(X.T, X)
+        G = np.dot(Rx.T, Rx) # = X^t X
         Ginv = scipy.linalg.inv(G)
-        slist = [sfunc_d[stype](G) for stype in sfunc_d]
+        minEV = 1 / power_method(Ginv, p,
+                                    startvec = rand_unit, niter = 30)
+        slist = [sfunc_d[stype](G, minEV) for stype in sfunc_d]
         cmlist = [ko.get_cmat(X, sv, Ginv) for sv in slist]
         for jyx in range(nsim_yx):
             Y = genYfunc(X, N)
@@ -169,10 +186,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 if __name__ == "__main__":
 
     # Sample size
-    n = 500
+    n = 5000
 
     # Number of features
-    p = 6
+    p = 50
 
     # Correlation between each active variable and its paired confounder
     r = 0.3

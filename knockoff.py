@@ -1,49 +1,60 @@
 import numpy as np
-from scipy.optimize import minimize, Bounds
+from scipy.optimize import minimize, Bounds, check_grad, approx_fprime
 import scipy.linalg
 from sklearn.linear_model import LassoCV
 
 
-def get_ldetfun(Sigma, tol=1e-10):
+def get_ldetfun(Sigma, tol = 1e-8):
+    i, j = np.diag_indices(Sigma.shape[0])
     def f(svec):
-        W = 2 * Sigma - np.diag(svec)
-        Wev = np.linalg.eigvalsh(W)
-        if any(Wev < tol):
+        if np.any(svec < tol):
+            return -np.Inf
+        W = 2 * Sigma
+        W[i,j] -= svec
+        sgn, ld = np.linalg.slogdet(W)
+        if sgn <= 0:
             return -np.Inf
         else:
-            return np.sum(np.log(svec)) + np.sum(np.log(Wev))
+            return np.sum(np.log(svec)) + ld
     return f
 
 def get_ldetgrad(Sigma):
-    pdim = Sigma.shape[1]
+    p = Sigma.shape[0]
+    i, j = np.diag_indices(p)
     def f(svec):
-        W = 2 * Sigma - np.diag(svec)
+        if np.any(np.isnan(svec)):
+            return np.repeat(np.nan, p)
+        W = 2 * Sigma
+        W[i,j] -= svec
         Winv = np.linalg.inv(W)
         return 1.0 / svec - np.diag(Winv)
     return f
 
-def get_svec_equi(G):
-    evs = np.linalg.eigvalsh(G)
+
+def get_svec_equi(G, minEV = None):
+    if minEV is None:
+        minEV = scipy.linalg.eigvalsh(G, eigvals=(0,0))[0]
     pdim = G.shape[1]
-    svec = np.repeat(min([1.0, 2 * evs.min()]), pdim)
+    svec = np.repeat(min([1.0, 2 * minEV]), pdim)
     return svec
 
-def get_svec_ldet(G):
+def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbose=False, eta=0.3):
     ldetf = get_ldetfun(G)
     ldetgrad = get_ldetgrad(G)
     pdim = G.shape[0]
-    init_opt = minimize(lambda x: -ldetf(x),
-                x0=np.random.uniform(0.0,0.003,size=pdim),
-                method='L-BFGS-B',
-                bounds = Bounds(0.0, 1.0),
-                options = {'maxiter': 10})
+    if startval is None:
+        if minEV is None:
+            minEV = scipy.linalg.eigvalsh(G, eigvals=(0,0))[0]
+        startval = np.repeat(minEV, pdim)
     ldopt = minimize(lambda x: -ldetf(x),
-            x0 = init_opt.x,
-            method='L-BFGS-B',
-            jac = lambda x: -ldetgrad(x),
-            options={"maxiter": 25000},
-            tol = 1e-10,
-            bounds = Bounds(0.0, 1.0))
+                     x0 = startval,
+                     method='TNC',
+                     jac = lambda x: -ldetgrad(x),
+                     options={"maxiter": maxiter,
+                            'ftol': tol,
+                            'eta': eta,
+                            'disp': verbose},
+                     bounds = Bounds(0.0, 1.0))
     svec = ldopt.x
     return svec
 
@@ -175,7 +186,7 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     CtC[i, j] += 2 * svec
     # CtC_old = 2 * Smat - np.matmul(Smat, Ginv_S)
     w, v = scipy.linalg.eigh(CtC)
-    w[abs(w) < tol] = 0
+    w[w < tol] = 0
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
