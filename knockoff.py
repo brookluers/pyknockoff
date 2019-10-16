@@ -108,28 +108,39 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
-def stat_lasso_coef(X, Xk, Y, n_alphas = 200):
+def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfold=3):
     p = X.shape[1]
     N = X.shape[0]
     XXk = np.concatenate((X, Xk), axis=1)
-    cp = np.dot(XXk.T, Y)
+    if cp2p is None:
+        cp = np.dot(XXk.T, Y)
+    else:
+        cp = cp2p
     alpha_max = max(np.abs(cp)) # ? divide by N here ?
     alpha_min = alpha_max / 1000
     k = np.linspace(0, n_alphas - 1, n_alphas) / n_alphas
     alphas = alpha_max * (alpha_min / alpha_max)**k
-    lfit = LassoCV(cv=5, alphas=alphas, max_iter = 5000).fit(XXk, Y)
+    lfit = LassoCV(cv=nfold, alphas=alphas, precompute=precompute, fit_intercept=False,  max_iter = 2000).fit(XXk, Y)
     b = lfit.coef_
     return [abs(b[i]) - abs(b[i + p]) for i in range(p)]
 
-def stat_ols(X, Xk, Y):
+def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
-    b = scipy.linalg.solve(np.dot(XXk.T, XXk), np.dot(XXk.T, Y))
+    if G2p is None or cp2p is None:
+        b = scipy.linalg.solve(np.dot(XXk.T, XXk), np.dot(XXk.T, Y))
+    else:
+        b = scipy.linalg.solve(G2p, cp2p)
     return [abs(b[i]) - abs(b[i + p]) for i in range(p)]
 
-def stat_crossprod(X, Xk, Y):
-    aXYcp = np.abs(np.dot(X.T, Y))
-    aXkYcp = np.abs(np.dot(Xk.T, Y))
+def stat_crossprod(X, Xk, Y, cp2p=None):
+    p = X.shape[1]
+    if cp2p is None:
+        aXYcp = np.abs(np.dot(X.T, Y))
+        aXkYcp = np.abs(np.dot(Xk.T, Y))
+    else:
+        aXYcp = np.abs(cp2p[0:p])
+        aXkYcp = np.abs(cp2p[p:(2*p)])
     return aXYcp - aXkYcp
 
 def knockoff_threshold(Wstat, q, offset):

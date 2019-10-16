@@ -7,10 +7,10 @@ def get_exch(p, rho):
     ret[np.triu_indices(p, 1)] = rho
     return ret
 
-def get_2block(p, rho):
+def get_2block(p, k, rho):
     ret = np.eye(p)
-    ret[0:p//2,p//2:] = rho * np.eye(p//2)
-    ret[p//2:,0:p//2] = rho * np.eye(p//2)
+    ret[0:k, k:] = rho * np.eye(k)
+    ret[k:, 0:k] = rho * np.eye(k)
     return ret
 
 def gen_Y(X, N, beta, sigma=1):
@@ -47,7 +47,7 @@ def rand_beta_flat(p, k, effsize):
     beta[nonz_ix] *= signs
     return beta
 
-def fix_beta_firsthalf(p, effsize):
-    beta = np.concatenate((np.ones(p//2), np.zeros(p - p//2)))
+def fix_beta_first_k(p, k, effsize):
+    beta = np.concatenate((np.ones(k), np.zeros(p - k)))
     beta *= effsize
     return beta
