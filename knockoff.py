@@ -76,7 +76,7 @@ def norm2_utheta_y(theta, ut1, ut2, Y, ut1T_Y=None, ut2T_Y=None):
     u12Ycross = np.inner(ut2T_Y, ut1T_Y)
     return sintheta**2 * ut1T_Ysq + costheta**2 * ut2T_Ysq + 2 * costheta * sintheta * u12Ycross
 
-@profile
+
 def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
     if tseq is None:
         tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 100)
@@ -121,7 +121,7 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
-@profile
+
 def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfold=3, copy_X=True):
     p = X.shape[1]
     N = X.shape[0]
@@ -134,6 +134,7 @@ def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfol
             #alphas=alphas,
             n_alphas = n_alphas,
             selection='random', tol=1e-3,
+            n_jobs = 2,
             precompute=precompute,
             copy_X = copy_X,
             fit_intercept=False).fit(XXk, Y)
@@ -149,7 +150,7 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         b = scipy.linalg.solve(G2p, cp2p)
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
-@profile
+
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
     if cp2p is None:
@@ -202,7 +203,7 @@ def doKnockoff(X, Y, q, offset=1,
     sel = [W[j] >= thresh for j in range(p)]
     return sel
 
-@profile
+
 def get_cmat(X, svec, Ginv=None, tol=1e-7):
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
@@ -215,7 +216,7 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
-@profile
+
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
     if Utilde is None:
