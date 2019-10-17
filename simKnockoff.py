@@ -4,16 +4,19 @@ import numpy as np
 import scipy
 import pandas as pd
 
-np.set_printoptions(precision=3, suppress=True)
+np.set_printoptions(precision=5, suppress=True)
 
 wfunc_d = {
     'ols': lambda X, Xk, Y, G2p, cp2p: ko.stat_ols(X, Xk, Y, G2p, cp2p),
     'crossprod': lambda X, Xk, Y, G2p, cp2p:  ko.stat_crossprod(X, Xk, Y, cp2p=cp2p),
-    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p, cp2p=cp2p)
+    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p, cp2p=cp2p, copy_X=False)
 }
+
+theta_seq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 150)
+
 utfunc_d = {
-    'util_rand': ko.get_util_random,
-    'utheta': lambda Qx, N, p, Y, Rx: ko.get_utheta_fixfrac(Qx, N, p, Y, Rx, np.linspace((1/4)*np.pi, (3/4)*np.pi, 250))
+    'util_rand': lambda Qx, N, p, Y, Rx, ut1=None: ko.get_util_random(Qx, N, p) if ut1 is None else ut1,
+    'utheta': lambda Qx, N, p, Y, Rx, ut1: ko.get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=theta_seq, ut1 = ut1)
 }
 
 sfunc_d = {
@@ -70,23 +73,10 @@ def get_fprfunc(beta, tol=1e-8):
 def power_method(A, p, startvec, niter=10):
     ek = startvec
     for _ in range(niter):
-        ek1 = np.dot(A, ek)
+        ek1 = np.matmul(A, ek)
         ek1_norm = np.linalg.norm(ek1)
         ek = ek1 / ek1_norm
-    return np.dot(np.dot(ek.T, A), ek)
-
-def one_rslt(W, Y, p, FDR, ppv, tpr, fdp, fpr, offset=1):
-    thresh = ko.knockoff_threshold(W, FDR, offset)
-    sel = [Wj >= thresh for Wj in W]
-    ret = {
-    'ppv': ppv(sel),
-    'tpr': tpr(sel),
-    'fdp': fdp(sel),
-    'fpr': fpr(sel),
-    'nsel': sum(sel)
-    }
-    ret.update({"sel{:d}".format(i): 1 * sel[i] for i in range(p)})
-    return ret
+    return np.matmul(np.matmul(ek.T, A), ek)
 
 def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             effsize, FDR=0.1, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'],
@@ -129,34 +119,48 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
         offset = 1
     print("true effects = \n\t" + str(beta))
     print("cov(X)[0:5, 0:5]: \t" + str(Sigma[0:5,0:5]).replace('\n','\n\t\t\t'))
+    rslt_keys = ['ppv','tpr','fdp','fpr','nsel']
+    rslt_keys.extend(["sel{:d}".format(i) for i in range(p)])
     rslt = []
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, Rx = scipy.linalg.qr(X, mode='economic')
-        G = np.dot(Rx.T, Rx) # = X^t X
+        ut1 = ko.get_util_random(Qx, N, p)
+        G = np.matmul(Rx.T, Rx) # = X^t X
         Ginv = scipy.linalg.inv(G)
         minEV = 1 / power_method(Ginv, p, startvec = rand_unit, niter = 30)
         slist = [sfunc_d[stype](G, minEV) for stype in stypes]
         cmlist = [ko.get_cmat(X, sv, Ginv) for sv in slist]
         for jyx in range(nsim_yx): # Generate Y | X
             Y = genYfunc(X, N)
+            XYcp = np.matmul(X.T, Y)
             for juyx in range(nsim_uyx): # Generate Utilde | X, Y
                 # (X, Y) are fixed
                 # one Utilde for each utype
-                Utlist = [utfunc_d[utype](Qx, N, p, Y, Rx) for utype in utypes]
-                ufracs = [np.sum(np.dot(Ut, np.dot(Ut.T, Y))**2) / np.sum(Y**2) for Ut in Utlist]
+                Utlist = [utfunc_d[utype](Qx, N, p, Y, Rx, ut1) for utype in utypes]
+                ufracs = [np.sum(np.matmul(Ut, np.matmul(Ut.T, Y))**2) / np.sum(Y**2) for Ut in Utlist]
                 # len(utypes) * len(stypes)
                 Xtlist = [ko.getknockoffs_qr(X, G, sv_r, Qx, N, p, Ut, Ginv, cm_r) for Ut in Utlist for (sv_r, cm_r) in zip(slist, cmlist)]
-                suffStat = [ (np.dot(XXk.T, XXk), np.dot(XXk.T, Y)) for XXk in [np.concatenate((X, Xk), axis=1) for Xk in Xtlist]]
+                # suffStat = [ (np.matmul(XXk.T, XXk), np.matmul(XXk.T, Y)) for XXk in [np.concatenate((X, Xk), axis=1) for Xk in Xtlist]]
+                # pre-compute np.matmul(X.T, Xk)
+                X_Xk_cplist = [np.matmul(X.T, Xk) for Xk in Xtlist]
+                Xk_Y_cplist = [np.matmul(Xk.T, Y) for Xk in Xtlist]
+                # List of (  2p-dim Gram Matrix, (X Xtilde)^t Y )
+                #   for each Xtilde
+                suffStat = [ (np.block([[G, XkX], [XkX,G]]),
+                                np.concatenate((XYcp, Xk_Ycp))) for
+                                (Xk_Ycp, XkX) in zip(Xk_Y_cplist, X_Xk_cplist)]
                 # len(wtypes) * len(Xtlist)
                 #    = len(wtypes) * len(utypes) * len(stypes)
                 Wlist = [wfunc_d[wtype](X, Xk, Y, G2p, cp2p) for wtype in wtypes for (Xk, (G2p, cp2p)) in zip(Xtlist, suffStat)]
                 simparm_inner_byW = [
                         {'wtype': wtype, 'utype': utype, 'ufrac': uf, 'stype': stype, 'juyx': juyx, 'jyx': jyx, 'jx': jx}
                     for wtype in wtypes for (utype, uf) in zip(utypes, ufracs) for stype in stypes]
-                res_byW = [
-                        {**one_rslt(wvec, Y, p, FDR, ppv, tpr, fdp, fpr, offset), **pj}
-                        for (wvec, pj) in zip(Wlist, simparm_inner_byW)]
+                sel_byW = [(wvec >= ko.knockoff_threshold(wvec, FDR, offset)).tolist() for wvec in Wlist]
+                res_byW = [{**dict(zip(rslt_keys,
+                                        [ppv(sel), tpr(sel), fdp(sel), fpr(sel), sum(sel)] + [1 * sj for sj in sel ])), **pj}
+                            for (sel, pj) in
+                            zip(sel_byW, simparm_inner_byW)]
                 rslt.extend(res_byW)
 
     df = pd.DataFrame(rslt)
@@ -170,27 +174,27 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 if __name__ == "__main__":
 
     # Sample size
-    n = 500
+    n = 10000
 
     # Number of features
-    p = 6
+    p = 50
 
     # Correlation between each active variable and its paired confounder
-    r = 0.3
+    r = 0.5
 
     # Target FDR
     fdr_target = 0.1
 
     # Effect size
-    es = 1.0
+    es = 3.5
 
     np.random.seed(1)
     offset = 0
     k = p//2
-    nsim_x = 1
-    nsim_yx = 1000
+    nsim_x = 10
+    nsim_yx = 1
     nsim_uyx = 1
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
-            offset=offset, corstr='2block',
-            betatype='first_k', stypes=['equi', 'ldet'], wtypes=['ols', 'crossprod'], utypes=['util_rand', 'utheta'],
-            fixGram=True, center=False, scale=False)
+            offset=offset, corstr='exch',
+            betatype='flat', stypes=['equi', 'ldet'], wtypes=['crossprod', 'lasso_coef'], utypes=['util_rand', 'utheta'],
+            fixGram=False, center=True, scale=True)

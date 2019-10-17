@@ -59,43 +59,56 @@ def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbos
     return svec
 
 def get_util_random(Qx, N, p, *args):
-    Utilde_raw = np.random.normal(size = (N, p))
-    Utilde_raw = Utilde_raw - np.matmul(Qx, np.dot(Qx.T, Utilde_raw))
-    Utilde, _ = scipy.linalg.qr(Utilde_raw, mode='economic')
+    Utilde_raw = np.random.rand(N, p)
+    Utilde_raw -= np.matmul(Qx, np.matmul(Qx.T, Utilde_raw))
+    Utilde, Ru = scipy.linalg.qr(Utilde_raw, mode='economic')
     return Utilde
 
-def norm2_utheta_y(theta, ut1, ut2, Y):
-    utheta = [np.sin(tj) * ut1 + np.cos(tj) * ut2 for tj in theta]
-    return [scipy.linalg.norm(np.dot(utj, np.dot(utj.T,Y)))**2 for utj in utheta]
+def norm2_utheta_y(theta, ut1, ut2, Y, ut1T_Y=None, ut2T_Y=None):
+    sintheta = np.sin(theta)
+    costheta = np.cos(theta)
+    if ut1T_Y is None:
+        ut1T_Y = np.matmul(ut1.T, Y)
+    if ut2T_Y is None:
+        ut2T_Y = np.matmul(ut2.T, Y)
+    ut1T_Ysq = np.inner(ut1T_Y, ut1T_Y)
+    ut2T_Ysq = np.inner(ut2T_Y, ut2T_Y)
+    u12Ycross = np.inner(ut2T_Y, ut1T_Y)
+    return sintheta**2 * ut1T_Ysq + costheta**2 * ut2T_Ysq + 2 * costheta * sintheta * u12Ycross
 
-
-def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None):
+@profile
+def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
     if tseq is None:
-        tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 250)
+        tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 100)
     y2n = np.sum(Y**2)
-    QtY = np.dot(Qx.T, Y)
-    Yresid = Y - np.dot(Qx, QtY)
+    QtY = np.matmul(Qx.T, Y)
+    Yresid = Y - np.matmul(Qx, QtY)
+    ssq_Yresid = np.sum(Yresid**2)
     if target_frac is None:
-        G = np.dot(Rx.T, Rx)
+        G = np.matmul(Rx.T, Rx)
         bhat = scipy.linalg.solve_triangular(Rx, QtY)
-        sig2hat = np.sum(Yresid**2) / (N - p)
-        target_frac = (sig2hat * p) / ((N-p) * sig2hat + np.dot(np.dot(bhat, G), bhat))
-    Yresid /= np.sqrt(np.sum(Yresid**2))
-
-    ut1 = get_util_random(Qx, N, p)
-    Q_xuy, _ = scipy.linalg.qr(np.concatenate((ut1, Yresid[:, None], Qx), axis=1), mode='economic')
-    Q_xu, _ = scipy.linalg.qr(np.concatenate((ut1, Qx), axis=1), mode='economic')
-
-    ut2 = np.random.normal(size = (N, p))
-    ut2 -= np.dot(Q_xuy, np.dot(Q_xuy.T, ut2))
-    ut2, _ = scipy.linalg.qr(ut2, mode='economic')
-
-    ut3 = np.concatenate((Yresid[:, None], np.random.normal(size = (N, p - 1))), axis=1)
-    ut3 -= np.dot(Q_xu, np.dot(Q_xu.T, ut3))
-    ut3, _ = scipy.linalg.qr(ut3, mode='economic')
-
-    frac2 = norm2_utheta_y(tseq, ut1, ut2, Y) / y2n
-    frac3 = norm2_utheta_y(tseq, ut1, ut3, Y) / y2n
+        sig2hat = ssq_Yresid / (N - p)
+        target_frac = (sig2hat * p) / ((N-p) * sig2hat + np.matmul(np.matmul(bhat, G), bhat))
+    Yresid /= np.sqrt(ssq_Yresid)
+    if ut1 is None:
+        ut1 = get_util_random(Qx, N, p)
+    Q_xu = np.concatenate((Qx, ut1), axis=1)
+    R_xu = np.eye(Q_xu.shape[1])
+    Q_xuy, _ = scipy.linalg.qr_insert(Q_xu, R_xu, Yresid[:, None], Q_xu.shape[1], which='col')
+    # ut2 is orthogonal to Y, X, ut1
+    Z_Np = np.random.rand(N, p)
+    ut2 = np.empty_like(Z_Np)
+    np.copyto(ut2, Z_Np)
+    ut2 -= np.matmul(Q_xuy, np.matmul(Q_xuy.T, ut2))
+    ut2, _ = np.linalg.qr(ut2, mode='reduced')
+    # ut3 is orthogonal to ut1, x
+    # but it contains Yresid
+    ut3 = np.concatenate((Yresid[:, None], Z_Np[:, 0:(p-1)]), axis=1)
+    ut3 -= np.matmul(Q_xu, np.matmul(Q_xu.T, ut3))
+    ut3, _ = np.linalg.qr(ut3, mode='reduced')
+    ut1T_Y = np.matmul(ut1.T, Y)
+    frac2 = norm2_utheta_y(tseq, ut1, ut2, Y, ut1T_Y) / y2n
+    frac3 = norm2_utheta_y(tseq, ut1, ut3, Y, ut1T_Y) / y2n
     fd2 = np.abs(frac2 - target_frac)
     fd3 = np.abs(frac3 - target_frac)
     imin2 = fd2.argmin()
@@ -108,55 +121,55 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
-def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfold=3):
+@profile
+def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfold=3, copy_X=True):
     p = X.shape[1]
     N = X.shape[0]
     XXk = np.concatenate((X, Xk), axis=1)
     if cp2p is None:
-        cp = np.dot(XXk.T, Y)
+        cp = np.matmul(XXk.T, Y)
     else:
         cp = cp2p
-    alpha_max = max(np.abs(cp)) # ? divide by N here ?
-    alpha_min = alpha_max / 1000
-    k = np.linspace(0, n_alphas - 1, n_alphas) / n_alphas
-    alphas = alpha_max * (alpha_min / alpha_max)**k
-    lfit = LassoCV(cv=nfold, alphas=alphas, precompute=precompute, fit_intercept=False,  max_iter = 2000).fit(XXk, Y)
+    lfit = LassoCV(cv=nfold,
+            #alphas=alphas,
+            n_alphas = n_alphas,
+            selection='random', tol=1e-3,
+            precompute=precompute,
+            copy_X = copy_X,
+            fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
-    return [abs(b[i]) - abs(b[i + p]) for i in range(p)]
+    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
 def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     if G2p is None or cp2p is None:
-        b = scipy.linalg.solve(np.dot(XXk.T, XXk), np.dot(XXk.T, Y))
+        b = scipy.linalg.solve(np.matmul(XXk.T, XXk), np.matmul(XXk.T, Y))
     else:
         b = scipy.linalg.solve(G2p, cp2p)
-    return [abs(b[i]) - abs(b[i + p]) for i in range(p)]
+    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
+@profile
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
     if cp2p is None:
-        aXYcp = np.abs(np.dot(X.T, Y))
-        aXkYcp = np.abs(np.dot(Xk.T, Y))
+        aXYcp = np.abs(np.matmul(X.T, Y))
+        aXkYcp = np.abs(np.matmul(Xk.T, Y))
     else:
         aXYcp = np.abs(cp2p[0:p])
         aXkYcp = np.abs(cp2p[p:(2*p)])
-    return aXYcp - aXkYcp
+    return np.array(aXYcp - aXkYcp)
 
 def knockoff_threshold(Wstat, q, offset):
-    p = len(Wstat)
     Wabs = np.sort(np.abs(Wstat))
-    ok_ix = []
-    for j in range(p):
-        thresh = Wabs[j]
-        numer = offset + np.sum([Wstat[i] <= -thresh for i in range(p)])
-        denom = max(1.0, np.sum([Wstat[i] >= thresh for i in range(p)]))
-        if numer / denom <= q:
-            ok_ix.append(j)
-    if len(ok_ix) > 0:
-        return Wabs[ok_ix[0]]
-    else:
+    Wa_mat, Wjmat = np.meshgrid(Wabs, Wstat, indexing='ij')
+    numer = offset + np.sum(Wjmat <= -Wa_mat, axis=1)
+    denom = np.maximum(1, np.sum(Wjmat >= Wa_mat, axis=1))
+    ok_pos = (numer / denom) <=  q
+    if np.sum(ok_pos) == 0:
         return float('Inf')
+    else:
+        return Wabs[np.argmax(ok_pos)]
 
 def doKnockoff(X, Y, q, offset=1,
                 stype='ldet', wstat='ols',
@@ -168,7 +181,7 @@ def doKnockoff(X, Y, q, offset=1,
     if scale:
         xnorms = scipy.linalg.norm(X, axis=0)
         X = X / xnorms
-    G = np.dot(X.T, X)
+    G = np.matmul(X.T, X)
     Qx, _ = scipy.linalg.qr(X, mode='economic')
     Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p)
     if stype == 'ldet':
@@ -189,6 +202,7 @@ def doKnockoff(X, Y, q, offset=1,
     sel = [W[j] >= thresh for j in range(p)]
     return sel
 
+@profile
 def get_cmat(X, svec, Ginv=None, tol=1e-7):
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
@@ -201,6 +215,7 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
+@profile
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
     if Utilde is None:
