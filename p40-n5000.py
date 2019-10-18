@@ -19,11 +19,11 @@ if __name__ == "__main__":
     p = 40
 
     # Test sequence of correlation values
-    rhotest = [0.2, 0.4, 0.6, 0.8]
+    rhotest = [0.2, 0.4] #, 0.6, 0.8]
 
     # population correlation structures to test
-    corstr_test = ['exch', '2block']
-    betatype_test = ['flat', 'firsthalf']
+    corstr_test = ['exch'] # , '2block']
+    betatype_test = ['flat'] # , 'firsthalf']
 
     # Target FDR
     fdr_target = 0.1
@@ -31,10 +31,9 @@ if __name__ == "__main__":
     # Effect size
     es = 3.5
 
-
-    offsets = [0, 1]
+    offsets = [0]
     k = p//2
-    nsim_x = 1000
+    nsim_x = 10
     nsim_yx = 1
     nsim_uyx = 1
     parlist = [{'nsim_x': nsim_x,

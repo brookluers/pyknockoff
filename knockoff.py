@@ -2,7 +2,13 @@ import numpy as np
 from scipy.optimize import minimize, Bounds, check_grad, approx_fprime
 import scipy.linalg
 from sklearn.linear_model import LassoCV
+from sklearn.linear_model import LassoLarsIC
 
+def get_alphas_lasso(cp2p, n_alphas, N):
+    alpha_max = np.max(np.abs(cp2p)) / N
+    alpha_min = alpha_max / 1000
+    k = np.linspace(0, n_alphas - 1, n_alphas) / n_alphas
+    return alpha_max * (alpha_min / alpha_max)**k
 
 def get_ldetfun(Sigma, tol = 1e-8):
     i, j = np.diag_indices(Sigma.shape[0])
@@ -37,6 +43,7 @@ def get_svec_equi(G, minEV = None):
     pdim = G.shape[1]
     svec = np.repeat(min([1.0, 2 * minEV]), pdim)
     return svec
+
 
 def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbose=False, eta=0.3):
     ldetf = get_ldetfun(G)
@@ -122,14 +129,10 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
 
-def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfold=3, copy_X=True):
+def stat_lasso_coef(X, Xk, Y, precompute='auto', n_alphas = 100, nfold=3, copy_X=True):
     p = X.shape[1]
     N = X.shape[0]
     XXk = np.concatenate((X, Xk), axis=1)
-    if cp2p is None:
-        cp = np.matmul(XXk.T, Y)
-    else:
-        cp = cp2p
     lfit = LassoCV(cv=nfold,
             #alphas=alphas,
             n_alphas = n_alphas,
@@ -140,6 +143,20 @@ def stat_lasso_coef(X, Xk, Y, precompute='auto', cp2p=None, n_alphas = 100, nfol
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
+
+
+def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='aic'):
+    p = X.shape[1]
+    XXk = np.concatenate((X, Xk), axis=1)
+    lfit = LassoLarsIC(criterion=criterion,
+            precompute=precompute,
+            copy_X = copy_X,
+            eps = 1e-12,
+            fit_intercept=False).fit(XXk, Y)
+    b = lfit.coef_
+    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
+
+
 
 def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     p = X.shape[1]
@@ -160,6 +177,7 @@ def stat_crossprod(X, Xk, Y, cp2p=None):
         aXYcp = np.abs(cp2p[0:p])
         aXkYcp = np.abs(cp2p[p:(2*p)])
     return np.array(aXYcp - aXkYcp)
+
 
 def knockoff_threshold(Wstat, q, offset):
     Wabs = np.sort(np.abs(Wstat))

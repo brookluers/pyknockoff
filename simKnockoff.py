@@ -9,7 +9,8 @@ np.set_printoptions(precision=5, suppress=True)
 wfunc_d = {
     'ols': lambda X, Xk, Y, G2p, cp2p: ko.stat_ols(X, Xk, Y, G2p, cp2p),
     'crossprod': lambda X, Xk, Y, G2p, cp2p:  ko.stat_crossprod(X, Xk, Y, cp2p=cp2p),
-    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p, cp2p=cp2p, copy_X=False)
+    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p),
+    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='aic')
 }
 
 theta_seq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 150)
@@ -41,6 +42,9 @@ def get_beta(betatype, p, k, effsize):
         beta = gen.rand_beta_flat(p, k, effsize)
     elif betatype == 'first_k':
         beta = gen.fix_beta_first_k(p, k, effsize)
+    else:
+        print("Unknown betatype, using 'flat'")
+        beta = gen.rand_beta_flat(p, k, effsize)
     return beta
 
 def get_fdpfunc(beta, tol=1e-8):
@@ -78,6 +82,7 @@ def power_method(A, p, startvec, niter=10):
         ek = ek1 / ek1_norm
     return np.matmul(np.matmul(ek.T, A), ek)
 
+@profile
 def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             effsize, FDR=0.1, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'],
             wtypes = ['ols', 'crossprod'],
@@ -141,7 +146,6 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                 ufracs = [np.sum(np.matmul(Ut, np.matmul(Ut.T, Y))**2) / np.sum(Y**2) for Ut in Utlist]
                 # len(utypes) * len(stypes)
                 Xtlist = [ko.getknockoffs_qr(X, G, sv_r, Qx, N, p, Ut, Ginv, cm_r) for Ut in Utlist for (sv_r, cm_r) in zip(slist, cmlist)]
-                # suffStat = [ (np.matmul(XXk.T, XXk), np.matmul(XXk.T, Y)) for XXk in [np.concatenate((X, Xk), axis=1) for Xk in Xtlist]]
                 # pre-compute np.matmul(X.T, Xk)
                 X_Xk_cplist = [np.matmul(X.T, Xk) for Xk in Xtlist]
                 Xk_Y_cplist = [np.matmul(Xk.T, Y) for Xk in Xtlist]
@@ -177,24 +181,26 @@ if __name__ == "__main__":
     n = 10000
 
     # Number of features
-    p = 50
+    p = 80
 
     # Correlation between each active variable and its paired confounder
-    r = 0.5
+    r = 0.7
 
     # Target FDR
-    fdr_target = 0.1
+    fdr_target = 0.2
 
     # Effect size
     es = 3.5
 
     np.random.seed(1)
     offset = 0
-    k = p//2
-    nsim_x = 10
+    k = 20
+    nsim_x = 40
     nsim_yx = 1
     nsim_uyx = 1
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
             offset=offset, corstr='exch',
-            betatype='flat', stypes=['equi', 'ldet'], wtypes=['crossprod', 'lasso_coef'], utypes=['util_rand', 'utheta'],
+            betatype='flat', stypes=['equi', 'ldet'],
+            wtypes=['crossprod', 'lasso_coefIC'],
+            utypes=['util_rand', 'utheta'],
             fixGram=False, center=True, scale=True)

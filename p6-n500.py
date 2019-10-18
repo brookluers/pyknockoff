@@ -22,8 +22,8 @@ if __name__ == "__main__":
     rhotest = [0.2, 0.4, 0.6, 0.8]
 
     # population correlation structures to test
-    corstr_test = ['exch', '2block']
-    betatype_test = ['flat', 'firsthalf']
+    corstr_test = ['exch']
+    betatype_test = ['flat']
 
     # Target FDR
     fdr_target = 0.1
