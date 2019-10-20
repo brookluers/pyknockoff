@@ -10,7 +10,7 @@ wfunc_d = {
     'ols': lambda X, Xk, Y, G2p, cp2p: ko.stat_ols(X, Xk, Y, G2p, cp2p),
     'crossprod': lambda X, Xk, Y, G2p, cp2p:  ko.stat_crossprod(X, Xk, Y, cp2p=cp2p),
     'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p),
-    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='aic')
+    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='bic')
 }
 
 theta_seq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 150)
@@ -32,6 +32,9 @@ def get_Sigma(corstr, p, k, rho):
     elif corstr == '2block':
         print("Using '2block' covariance matrix")
         Sigma = gen.get_2block(p, k, rho)
+    elif corstr == 'ar1':
+        print("Using AR covariance")
+        Sigma = gen.get_ar(p, rho)
     else:
         print("Unknown corstr, using exchangeable")
         Sigma = gen.get_exch(p, rho)
@@ -82,7 +85,7 @@ def power_method(A, p, startvec, niter=10):
         ek = ek1 / ek1_norm
     return np.matmul(np.matmul(ek.T, A), ek)
 
-@profile
+
 def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             effsize, FDR=0.1, offset=1, corstr='exch', betatype='flat', stypes = ['equi', 'ldet'],
             wtypes = ['ols', 'crossprod'],
@@ -178,16 +181,15 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 if __name__ == "__main__":
 
     # Sample size
-    n = 10000
+    n = 3000
 
     # Number of features
-    p = 80
+    p = 100
 
     # Correlation between each active variable and its paired confounder
-    r = 0.7
-
+    r = 0.9
     # Target FDR
-    fdr_target = 0.2
+    fdr_target = 0.1
 
     # Effect size
     es = 3.5
@@ -195,12 +197,12 @@ if __name__ == "__main__":
     np.random.seed(1)
     offset = 0
     k = 20
-    nsim_x = 40
+    nsim_x = 10
     nsim_yx = 1
     nsim_uyx = 1
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
             offset=offset, corstr='exch',
             betatype='flat', stypes=['equi', 'ldet'],
-            wtypes=['crossprod', 'lasso_coefIC'],
-            utypes=['util_rand', 'utheta'],
+            wtypes=['crossprod', 'ols', 'lasso_coefIC'],
+            utypes=['util_rand'],
             fixGram=False, center=True, scale=True)
