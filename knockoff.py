@@ -145,13 +145,15 @@ def stat_lasso_coef(X, Xk, Y, precompute='auto', n_alphas = 100, nfold=3, copy_X
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
 
-def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='aic'):
+def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='bic'):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     lfit = LassoLarsIC(criterion=criterion,
             precompute=precompute,
             copy_X = copy_X,
-            eps = 1e-12,
+            normalize=False,
+            max_iter=400,
+            eps = 1e-11,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
@@ -240,7 +242,6 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     w[w < tol] = 0
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
-
 
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
