@@ -10,7 +10,7 @@ wfunc_d = {
     'ols': lambda X, Xk, Y, G2p, cp2p: ko.stat_ols(X, Xk, Y, G2p, cp2p),
     'crossprod': lambda X, Xk, Y, G2p, cp2p:  ko.stat_crossprod(X, Xk, Y, cp2p=cp2p),
     'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p),
-    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='bic')
+    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='bic', max_iter=100)
 }
 
 theta_seq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 150)

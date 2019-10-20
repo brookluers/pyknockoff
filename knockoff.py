@@ -145,14 +145,14 @@ def stat_lasso_coef(X, Xk, Y, precompute='auto', n_alphas = 100, nfold=3, copy_X
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
 
-def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='bic'):
+def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='bic', max_iter=100):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     lfit = LassoLarsIC(criterion=criterion,
             precompute=precompute,
             copy_X = copy_X,
             normalize=False,
-            max_iter=400,
+            max_iter=max_iter,
             eps = 1e-11,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
