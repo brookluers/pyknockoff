@@ -162,11 +162,18 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     if G2p is None or cp2p is None:
-        b = scipy.linalg.solve(np.matmul(XXk.T, XXk), np.matmul(XXk.T, Y))
+        left = np.matmul(XXk.T,XXk)
+        right = np.matmul(XXk.T,Y)
     else:
-        b = scipy.linalg.solve(G2p, cp2p)
+        left = G2p
+        right = cp2p
+    try:
+        b = scipy.linalg.solve(left, right)
+    except (np.linalg.LinAlgError, np.linalg.LinAlgWarning):
+        b, _, _, _ = scipy.linalg.lstsq(left, right)
+    finally:
+        b, _, _, _ = scipy.linalg.lstsq(left, right)
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
-
 
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
