@@ -133,7 +133,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, Rx = scipy.linalg.qr(X, mode='economic')
-        ut1 = ko.get_util_random(Qx, N, p)
+        if nsim_uyx < 2:
+            ut1 = ko.get_util_random(Qx, N, p)
+        else:
+            ut1 = None
         G = np.matmul(Rx.T, Rx) # = X^t X
         Ginv = scipy.linalg.inv(G)
         minEV = 1 / power_method(Ginv, p, startvec = rand_unit, niter = 30)
@@ -184,10 +187,10 @@ if __name__ == "__main__":
     n = 3000
 
     # Number of features
-    p = 100
+    p = 40
 
     # Correlation between each active variable and its paired confounder
-    r = 0.9
+    r = 0.5
     # Target FDR
     fdr_target = 0.1
 
@@ -197,12 +200,12 @@ if __name__ == "__main__":
     np.random.seed(1)
     offset = 0
     k = 20
-    nsim_x = 10
+    nsim_x = 50
     nsim_yx = 1
-    nsim_uyx = 1
+    nsim_uyx = 20
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
             offset=offset, corstr='exch',
             betatype='flat', stypes=['equi', 'ldet'],
-            wtypes=['crossprod', 'ols', 'lasso_coefIC'],
+            wtypes=['crossprod', 'ols'],
             utypes=['util_rand'],
             fixGram=False, center=True, scale=True)

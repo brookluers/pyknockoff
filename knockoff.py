@@ -65,10 +65,11 @@ def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbos
     svec = ldopt.x
     return svec
 
+
 def get_util_random(Qx, N, p, *args):
     Utilde_raw = np.random.rand(N, p)
     Utilde_raw -= np.matmul(Qx, np.matmul(Qx.T, Utilde_raw))
-    Utilde, Ru = scipy.linalg.qr(Utilde_raw, mode='economic')
+    Utilde, Ru = np.linalg.qr(Utilde_raw, mode='reduced')
     return Utilde
 
 def norm2_utheta_y(theta, ut1, ut2, Y, ut1T_Y=None, ut2T_Y=None):
@@ -177,6 +178,7 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         b, _, _, _ = scipy.linalg.lstsq(left, right)
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
+
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
     if cp2p is None:
@@ -210,7 +212,7 @@ def doKnockoff(X, Y, q, offset=1,
         xnorms = scipy.linalg.norm(X, axis=0)
         X = X / xnorms
     G = np.matmul(X.T, X)
-    Qx, _ = scipy.linalg.qr(X, mode='economic')
+    Qx, _ = np.linalg.qr(X, mode='reduced')
     Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p)
     if stype == 'ldet':
         svec = get_svec_ldet(G)
@@ -224,6 +226,8 @@ def doKnockoff(X, Y, q, offset=1,
         W = stat_crossprod(X, Xtilde, Y)
     elif wstat == 'lasso_coef':
         W = stat_lasso_coef(X, Xtilde, Y)
+    elif wstat == 'lasso_coefIC':
+        W = stat_lassoLarsIC_coef(X, Xtilde, Y)
     else:
         W = stat_crossprod(X, Xtilde, Y)
     thresh = knockoff_threshold(W, q, offset)
@@ -242,6 +246,7 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     w[w < tol] = 0
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
+
 
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):

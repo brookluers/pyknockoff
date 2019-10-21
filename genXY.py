@@ -7,6 +7,10 @@ def get_exch(p, rho):
     ret[np.triu_indices(p, 1)] = rho
     return ret
 
+def get_ar(p, rho):
+    gd = np.indices((p,p))
+    return rho**np.abs(gd[0]-gd[1])
+
 def get_2block(p, k, rho):
     ret = np.eye(p)
     ret[0:k, k:] = rho * np.eye(k)
@@ -18,7 +22,7 @@ def gen_Y(X, N, beta, sigma=1):
 
 def gen_X(N, p, SigmaChol, scale=True, center=True):
     X = np.random.normal(size = (N, p))
-    X = np.dot(X, SigmaChol.T)
+    X = np.matmul(X, SigmaChol.T)
     if center:
         xmeans = np.mean(X, axis=0)
         X = X - xmeans
