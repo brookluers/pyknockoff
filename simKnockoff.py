@@ -91,7 +91,8 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             wtypes = ['ols', 'crossprod'],
             utypes = ['utheta', 'util_rand'],
             scale=True, center=True,
-             fixGram = False, to_csv = True):
+             fixGram = False, to_csv = True, tag='',
+             saveW = False):
     simparm_global = {
         'N': N, 'p': p, 'k': k, 'FDR': FDR,
         'rho': rho, 'corstr': corstr,
@@ -129,10 +130,12 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     print("cov(X)[0:5, 0:5]: \t" + str(Sigma[0:5,0:5]).replace('\n','\n\t\t\t'))
     rslt_keys = ['ppv','tpr','fdp','fpr','nsel']
     rslt_keys.extend(["sel{:d}".format(i) for i in range(p)])
+    if saveW:
+        rslt_keys.extend(['W{:d}'.format(i) for i in range(p)])
     rslt = []
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
-        Qx, Rx = scipy.linalg.qr(X, mode='economic')
+        Qx, Rx = np.linalg.qr(X, mode='reduced')
         if nsim_uyx < 2:
             ut1 = ko.get_util_random(Qx, N, p)
         else:
@@ -167,17 +170,30 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                         {'wtype': wtype, 'utype': utype, 'ufrac': uf, 'stype': stype, 'juyx': juyx, 'jyx': jyx, 'jx': jx}
                     for wtype in wtypes for (utype, uf) in zip(utypes, ufracs) for stype in stypes]
                 sel_byW = [(wvec >= ko.knockoff_threshold(wvec, FDR, offset)).tolist() for wvec in Wlist]
-                res_byW = [{**dict(zip(rslt_keys,
-                                        [ppv(sel), tpr(sel), fdp(sel), fpr(sel), sum(sel)] + [1 * sj for sj in sel ])), **pj}
-                            for (sel, pj) in
-                            zip(sel_byW, simparm_inner_byW)]
+                if saveW:
+                    res_byW = [{**dict(zip(rslt_keys,
+                                            [ppv(sel), tpr(sel), fdp(sel), fpr(sel), sum(sel)] + [1 * sj for sj in sel ] + wj.tolist())), **pj}
+                                for (sel, pj, wj) in
+                                zip(sel_byW, simparm_inner_byW, Wlist)]
+                else:
+                    res_byW = [{**dict(zip(rslt_keys,
+                                            [ppv(sel), tpr(sel), fdp(sel), fpr(sel), sum(sel)] + [1 * sj for sj in sel ])), **pj}
+                                for (sel, pj) in
+                                zip(sel_byW, simparm_inner_byW)]
                 rslt.extend(res_byW)
 
     df = pd.DataFrame(rslt)
     for pk in simparm_global:
         df[pk] = simparm_global[pk]
     if to_csv:
-        df.to_csv("ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}-fixGram".format(N, p, rho, offset) + str(fixGram) + ".csv", index=False)
+        fname = "ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-" + betatype + "-N{:d}-p{:d}-rho{:.2f}-off{:d}".format(N, p, rho, offset)
+        if fixGram:
+            fname += '-fixGram' + str(fixGram)
+        if saveW:
+            fname += '-saveW'
+        fname += '-' + tag
+        fname += '.csv'
+        df.to_csv(fname, index=False)
     return df
 
 
@@ -208,4 +224,5 @@ if __name__ == "__main__":
             betatype='flat', stypes=['equi', 'ldet'],
             wtypes=['crossprod', 'ols'],
             utypes=['util_rand'],
-            fixGram=False, center=True, scale=True)
+            fixGram=False, center=True, scale=True,
+            saveW = True)
