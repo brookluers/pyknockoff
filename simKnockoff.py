@@ -50,33 +50,6 @@ def get_beta(betatype, p, k, effsize):
         beta = gen.rand_beta_flat(p, k, effsize)
     return beta
 
-def get_fdpfunc(beta, tol=1e-8):
-    abs_beta = np.abs(beta)
-    def f(sel):
-        return np.sum(abs_beta[sel] < tol) / max(1, np.sum(sel))
-    return f
-
-def get_ppvfunc(beta, tol=1e-8):
-    abs_beta = np.abs(beta)
-    def f(sel):
-        return np.sum(abs_beta[sel] > tol) / max(1, np.sum(sel))
-    return f
-
-def get_tprfunc(beta, tol=1e-8):
-    abs_beta = np.abs(beta)
-    k = np.sum(abs_beta > tol)
-    def f(sel):
-        return np.sum(abs_beta[sel] > tol) / k
-    return f
-
-def get_fprfunc(beta, tol=1e-8):
-    abs_beta = np.abs(beta)
-    p = beta.shape[0]
-    k = np.sum(abs_beta > tol)
-    def f(sel):
-        return np.sum(abs_beta[sel] < tol) / (np.sum(abs_beta[sel] < tol) + p - k)
-    return f
-
 def power_method(A, p, startvec, niter=10):
     ek = startvec
     for _ in range(niter):
@@ -108,10 +81,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     rand_unit = rand_unit / np.linalg.norm(rand_unit)
     beta = get_beta(betatype, p, k, effsize)
     Sigma = get_Sigma(corstr, p, k, rho)
-    ppv = get_ppvfunc(beta)
-    tpr = get_tprfunc(beta)
-    fdp = get_fdpfunc(beta)
-    fpr = get_fprfunc(beta)
+    ppv = gen.get_ppvfunc(beta)
+    tpr = gen.get_tprfunc(beta)
+    fdp = gen.get_fdpfunc(beta)
+    fpr = gen.get_fprfunc(beta)
     if fixGram:
         print("Generating X with fixed Gram matrix")
         genXfunc = gen.gen_X_given_Gram

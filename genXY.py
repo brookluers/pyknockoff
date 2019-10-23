@@ -1,6 +1,34 @@
 import numpy as np
 import scipy.linalg
 
+
+def get_fdpfunc(beta, tol=1e-8):
+    abs_beta = np.abs(beta)
+    def f(sel):
+        return np.sum(abs_beta[sel] < tol) / max(1, np.sum(sel))
+    return f
+
+def get_ppvfunc(beta, tol=1e-8):
+    abs_beta = np.abs(beta)
+    def f(sel):
+        return np.sum(abs_beta[sel] > tol) / max(1, np.sum(sel))
+    return f
+
+def get_tprfunc(beta, tol=1e-8):
+    abs_beta = np.abs(beta)
+    k = np.sum(abs_beta > tol)
+    def f(sel):
+        return np.sum(abs_beta[sel] > tol) / k
+    return f
+
+def get_fprfunc(beta, tol=1e-8):
+    abs_beta = np.abs(beta)
+    p = beta.shape[0]
+    k = np.sum(abs_beta > tol)
+    def f(sel):
+        return np.sum(abs_beta[sel] < tol) / (np.sum(abs_beta[sel] < tol) + p - k)
+    return f
+
 def get_exch(p, rho):
     ret = np.eye(p)
     ret[np.tril_indices(p, -1)] = rho

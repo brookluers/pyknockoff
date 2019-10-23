@@ -44,7 +44,7 @@ def get_svec_equi(G, minEV = None):
     svec = np.repeat(min([1.0, 2 * minEV]), pdim)
     return svec
 
-
+@profile
 def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbose=False, eta=0.3):
     ldetf = get_ldetfun(G)
     ldetgrad = get_ldetgrad(G)
@@ -65,7 +65,7 @@ def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbos
     svec = ldopt.x
     return svec
 
-
+@profile
 def get_util_random(Qx, N, p, *args):
     Utilde_raw = np.random.rand(N, p)
     Utilde_raw -= np.matmul(Qx, np.matmul(Qx.T, Utilde_raw))
@@ -189,7 +189,7 @@ def stat_crossprod(X, Xk, Y, cp2p=None):
         aXkYcp = np.abs(cp2p[p:(2*p)])
     return np.array(aXYcp - aXkYcp)
 
-
+@profile
 def knockoff_threshold(Wstat, q, offset):
     Wabs = np.sort(np.abs(Wstat))
     Wa_mat, Wjmat = np.meshgrid(Wabs, Wstat, indexing='ij')
@@ -201,9 +201,14 @@ def knockoff_threshold(Wstat, q, offset):
     else:
         return Wabs[np.argmax(ok_pos)]
 
+@profile
 def doKnockoff(X, Y, q, offset=1,
-                stype='ldet', wstat='ols',
-                scale = True, center=True, tol=1e-10):
+                stype='ldet', svec=None, wstat='ols',
+                scale = True, center=True,
+                Utilde=None,
+                Qx=None, Rx=None, Ginv=None,
+                Cmat=None,
+                tol=1e-10):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
@@ -211,15 +216,18 @@ def doKnockoff(X, Y, q, offset=1,
     if scale:
         xnorms = scipy.linalg.norm(X, axis=0)
         X = X / xnorms
-    G = np.matmul(X.T, X)
-    Qx, _ = np.linalg.qr(X, mode='reduced')
-    Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p)
-    if stype == 'ldet':
-        svec = get_svec_ldet(G)
-    elif stype == 'equi':
-        svec = get_svec_equi(G)
-    else:
-        svec = get_svec_ldet(G)
+    if Qx is None:
+        Qx, Rx = np.linalg.qr(X, mode='reduced')
+    G = np.matmul(Rx.T, Rx)
+    if svec is None:
+        if stype == 'ldet':
+            svec = get_svec_ldet(G)
+        elif stype == 'equi':
+            svec = get_svec_equi(G)
+        else:
+            svec = get_svec_ldet(G)
+    Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+                    Utilde, Ginv, Cmat)
     if wstat == 'ols':
         W = stat_ols(X, Xtilde, Y)
     elif wstat=='crossprod':
@@ -231,11 +239,11 @@ def doKnockoff(X, Y, q, offset=1,
     else:
         W = stat_crossprod(X, Xtilde, Y)
     thresh = knockoff_threshold(W, q, offset)
-    sel = [W[j] >= thresh for j in range(p)]
+    sel = np.array([W[j] >= thresh for j in range(p)])
     return sel
 
-
-def get_cmat(X, svec, Ginv=None, tol=1e-7):
+@profile
+def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
     CtC = Ginv * -np.outer(svec, svec)   # - S Ginv S
@@ -247,7 +255,7 @@ def get_cmat(X, svec, Ginv=None, tol=1e-7):
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
-
+@profile
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
     if Utilde is None:
