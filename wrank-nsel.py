@@ -38,11 +38,12 @@ if __name__ == "__main__":
     fname += '.csv'
 
     rslt = []
-    vheader = ['jx','jyx','nW','fdp','tpr']
+    vheader = ['k','N','p','offset','nW', 'jx','jyx','FDR', 'fdp','tpr']
     vheader.extend(["sel{:d}".format(i) for i in range(p)])
-    vfmt = ['%d', '%d', '%d', '%.18e', '%.18e']
+    vfmt = ['%d', '%d', '%d','%d','%d','%d','%d','%.3f', '%.18e', '%.18e']
     vfmt.extend(['%d' for i in range(p)])
     vheader = ','.join(vheader)
+    gparm = [k, N, p, offset]
     for jx in range(nsim_x):
         X = gen.gen_X(N, p, SigmaChol) # scaled and centere
         Qx, Rx = np.linalg.qr(X, mode='reduced')
@@ -66,9 +67,9 @@ if __name__ == "__main__":
             sel_consensus = np.repeat(False, p)
             sel_consensus[ranksel[-avg_nsel:]] = True
             sel_one = selmat[0, :]
-            r1 = [jx, jyx, 1, fdp(sel_one), tpr(sel_one)]
+            r1 = gparm + [1, jx, jyx, FDR, fdp(sel_one), tpr(sel_one)]
             r1.extend((1 * sel_one).tolist())
-            rc = [jx, jyx, nW, fdp(sel_consensus), tpr(sel_consensus)]
+            rc = gparm + [nW, jx, jyx, FDR, fdp(sel_consensus), tpr(sel_consensus)]
             rc.extend((1 * sel_consensus).tolist())
             rslt.append(r1)
             rslt.append(rc)
