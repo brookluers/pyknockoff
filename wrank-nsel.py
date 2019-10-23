@@ -2,7 +2,6 @@ import numpy as np
 import knockoff as ko
 import genXY as gen
 
-# @profile
 if __name__ == "__main__":
     N = 5000
 
@@ -25,7 +24,7 @@ if __name__ == "__main__":
     es = 3.5
     nsim_x = 2
     nsim_yx = 3
-    nW = 50
+    nW = 10
     wtype = 'crossprod'
 
     np.random.seed(1)
@@ -35,13 +34,13 @@ if __name__ == "__main__":
 
     fname = "ko-wvote-nx" + str(nsim_x) + "-nyx" + str(nsim_yx)
     fname += '-N' + str(N) + '-p' + str(p)
-    fname += '-w' + wtype + '-ar1-rho' + str(rho) + '-off' + str(offset)
+    fname += '-w' + wtype + '-nW'+ str(nW) + '-ar1-rho' + str(rho) + '-off' + str(offset)
     fname += '.csv'
 
     rslt = []
-    vheader = ['jx','jyx','fdp','tpr']
+    vheader = ['jx','jyx','nW','fdp','tpr']
     vheader.extend(["sel{:d}".format(i) for i in range(p)])
-    vfmt = ['%d', '%d', '%.18e', '%.18e']
+    vfmt = ['%d', '%d', '%d', '%.18e', '%.18e']
     vfmt.extend(['%d' for i in range(p)])
     vheader = ','.join(vheader)
     for jx in range(nsim_x):
@@ -67,9 +66,9 @@ if __name__ == "__main__":
             sel_consensus = np.repeat(False, p)
             sel_consensus[ranksel[-avg_nsel:]] = True
             sel_one = selmat[0, :]
-            r1 = [jx, jyx, fdp(sel_one), tpr(sel_one)]
+            r1 = [jx, jyx, 1, fdp(sel_one), tpr(sel_one)]
             r1.extend((1 * sel_one).tolist())
-            rc = [jx, jyx, fdp(sel_consensus), tpr(sel_consensus)]
+            rc = [jx, jyx, nW, fdp(sel_consensus), tpr(sel_consensus)]
             rc.extend((1 * sel_consensus).tolist())
             rslt.append(r1)
             rslt.append(rc)
