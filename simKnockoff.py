@@ -9,8 +9,8 @@ np.set_printoptions(precision=5, suppress=True)
 wfunc_d = {
     'ols': lambda X, Xk, Y, G2p, cp2p: ko.stat_ols(X, Xk, Y, G2p, cp2p),
     'crossprod': lambda X, Xk, Y, G2p, cp2p:  ko.stat_crossprod(X, Xk, Y, cp2p=cp2p),
-    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y, precompute=G2p),
-    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, precompute=G2p, criterion='bic', max_iter=100)
+    'lasso_coef': lambda X, Xk, Y, G2p, cp2p: ko.stat_lasso_coef(X, Xk, Y), 
+    'lasso_coefIC': lambda X, Xk, Y, G2p, cp2p: ko.stat_lassoLarsIC_coef(X, Xk, Y, criterion='aic')
 }
 
 theta_seq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 150)
@@ -191,11 +191,11 @@ if __name__ == "__main__":
     k = 20
     nsim_x = 50
     nsim_yx = 1
-    nsim_uyx = 20
+    nsim_uyx = 1
     rslt = kosim(nsim_x, nsim_yx, nsim_uyx, n, p, k, r, es, fdr_target,
             offset=offset, corstr='exch',
             betatype='flat', stypes=['equi', 'ldet'],
-            wtypes=['crossprod', 'ols'],
+            wtypes=['crossprod', 'ols', 'lasso_coef', 'lasso_coefIC'],
             utypes=['util_rand'],
             fixGram=False, center=True, scale=True,
             saveW = True)

@@ -44,7 +44,6 @@ def get_svec_equi(G, minEV = None):
     svec = np.repeat(min([1.0, 2 * minEV]), pdim)
     return svec
 
-
 def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbose=False, eta=0.3):
     ldetf = get_ldetfun(G)
     ldetgrad = get_ldetgrad(G)
@@ -129,31 +128,26 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
-
-def stat_lasso_coef(X, Xk, Y, precompute='auto', n_alphas = 100, nfold=3, copy_X=True):
+def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
     p = X.shape[1]
     N = X.shape[0]
     XXk = np.concatenate((X, Xk), axis=1)
     lfit = LassoCV(cv=nfold,
-            #alphas=alphas,
             n_alphas = n_alphas,
-            selection='random', tol=1e-3,
+            tol=1e-3,
             n_jobs = 2,
-            precompute=precompute,
             copy_X = copy_X,
+            normalize = False,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
-
-def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=False, criterion='bic', max_iter=100):
+def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     lfit = LassoLarsIC(criterion=criterion,
-            precompute=precompute,
             copy_X = copy_X,
-            normalize=False,
-            max_iter=max_iter,
+            normalize = False,
             eps = 1e-11,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
@@ -242,7 +236,6 @@ def doKnockoff(X, Y, q, offset=1,
     sel = np.array([W[j] >= thresh for j in range(p)])
     return sel
 
-
 def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
@@ -254,7 +247,6 @@ def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     w[w < tol] = 0
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
-
 
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
