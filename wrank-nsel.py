@@ -12,19 +12,19 @@ if __name__ == "__main__":
     k = 50
 
     # Correlation
-    rho = 0.3
+    rho = 0.9
     # Populaiton covariance matrix
     Sigma = gen.get_ar(p, rho)
     SigmaChol = np.linalg.cholesky(Sigma)
 
     # Target FDR
     FDR = 0.1
-    offset = 0
+    offset = 1
     # Effect size
     es = 3.5
-    nsim_x = 2
-    nsim_yx = 3
-    nW = 10
+    nsim_x = 10
+    nsim_yx = 1
+    nW = 20
     wtype = 'crossprod'
 
     np.random.seed(1)
@@ -63,9 +63,11 @@ if __name__ == "__main__":
                     )
             selmat = np.array(selmat)
             avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
-            ranksel = np.argsort(np.sum(selmat, axis=0))
             sel_consensus = np.repeat(False, p)
-            sel_consensus[ranksel[-avg_nsel:]] = True
+            # Handle case where no variables selected in all W repetitions
+            if avg_nsel >= 1:
+                ranksel = np.argsort(np.sum(selmat, axis=0))
+                sel_consensus[ranksel[-avg_nsel:]] = True
             sel_one = selmat[0, :]
             r1 = gparm + [1, jx, jyx, FDR, fdp(sel_one), tpr(sel_one)]
             r1.extend((1 * sel_one).tolist())
