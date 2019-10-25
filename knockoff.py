@@ -4,6 +4,8 @@ import scipy.linalg
 from sklearn.linear_model import LassoCV
 from sklearn.linear_model import LassoLarsIC
 
+rng = np.random.default_rng()
+
 def get_alphas_lasso(cp2p, n_alphas, N):
     alpha_max = np.max(np.abs(cp2p)) / N
     alpha_min = alpha_max / 1000
@@ -64,9 +66,9 @@ def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbos
     svec = ldopt.x
     return svec
 
-
+#@profile
 def get_util_random(Qx, N, p, *args):
-    Utilde_raw = np.random.rand(N, p)
+    Utilde_raw = rng.standard_normal(size=(N,p))
     Utilde_raw -= np.matmul(Qx, np.matmul(Qx.T, Utilde_raw))
     Utilde, Ru = np.linalg.qr(Utilde_raw, mode='reduced')
     return Utilde
@@ -103,7 +105,7 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
     R_xu = np.eye(Q_xu.shape[1])
     Q_xuy, _ = scipy.linalg.qr_insert(Q_xu, R_xu, Yresid[:, None], Q_xu.shape[1], which='col')
     # ut2 is orthogonal to Y, X, ut1
-    Z_Np = np.random.rand(N, p)
+    Z_Np = rng.standard_normal(size=(N,p))
     ut2 = np.empty_like(Z_Np)
     np.copyto(ut2, Z_Np)
     ut2 -= np.matmul(Q_xuy, np.matmul(Q_xuy.T, ut2))
@@ -154,7 +156,6 @@ def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='a
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
 
-
 def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
@@ -172,7 +173,7 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         b, _, _, _ = scipy.linalg.lstsq(left, right)
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
-
+#@profile
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
     if cp2p is None:
@@ -183,7 +184,7 @@ def stat_crossprod(X, Xk, Y, cp2p=None):
         aXkYcp = np.abs(cp2p[p:(2*p)])
     return np.array(aXYcp - aXkYcp)
 
-
+#@profile
 def knockoff_threshold(Wstat, q, offset):
     Wabs = np.sort(np.abs(Wstat))
     Wa_mat, Wjmat = np.meshgrid(Wabs, Wstat, indexing='ij')
@@ -195,12 +196,12 @@ def knockoff_threshold(Wstat, q, offset):
     else:
         return Wabs[np.argmax(ok_pos)]
 
-
+#@profile
 def doKnockoff(X, Y, q, offset=1,
                 stype='ldet', svec=None, wstat='ols',
                 scale = True, center=True,
-                Utilde=None,
-                Qx=None, Rx=None, Ginv=None,
+                Utilde=None, nrep=1,
+                Qx=None, Rx=None, Ginv=None, G=None,
                 Cmat=None,
                 tol=1e-10):
     N, p = X.shape
@@ -212,7 +213,10 @@ def doKnockoff(X, Y, q, offset=1,
         X = X / xnorms
     if Qx is None:
         Qx, Rx = np.linalg.qr(X, mode='reduced')
-    G = np.matmul(Rx.T, Rx)
+    if G is None:
+        G = np.matmul(Rx.T, Rx)
+    if Cmat is None:
+        Cmat = get_cmat(X, svec, G, Ginv, tol)
     if svec is None:
         if stype == 'ldet':
             svec = get_svec_ldet(G)
@@ -220,22 +224,42 @@ def doKnockoff(X, Y, q, offset=1,
             svec = get_svec_equi(G)
         else:
             svec = get_svec_ldet(G)
-    Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
-                    Utilde, Ginv, Cmat)
     if wstat == 'ols':
-        W = stat_ols(X, Xtilde, Y)
+        Wfunc = stat_ols
     elif wstat=='crossprod':
-        W = stat_crossprod(X, Xtilde, Y)
+        Wfunc = stat_crossprod
     elif wstat == 'lasso_coef':
-        W = stat_lasso_coef(X, Xtilde, Y)
+        Wfunc = stat_lasso_coef
     elif wstat == 'lasso_coefIC':
-        W = stat_lassoLarsIC_coef(X, Xtilde, Y)
+        Wfunc = stat_lassoLarsIC_coef
     else:
-        W = stat_crossprod(X, Xtilde, Y)
-    thresh = knockoff_threshold(W, q, offset)
-    sel = np.array([W[j] >= thresh for j in range(p)])
+        Wfunc = stat_crossprod
+    if nrep < 2:
+        Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+                    Utilde, Ginv, Cmat)
+        W = Wfunc(X, Xtilde, Y)
+        thresh = knockoff_threshold(W, q, offset)
+        sel = np.array([W[j] >= thresh for j in range(p)])
+    else:
+        selmat = []
+        for i in range(nrep):
+            Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+                        Utilde=None, Ginv=Ginv, Cmat=Cmat,
+                        tol=tol)
+            W = Wfunc(X, Xtilde, Y)
+            thresh = knockoff_threshold(W, q, offset)
+            sel_i = np.array([W[j] >= thresh for j in range(p)])
+            selmat.append(sel_i)
+        selmat = np.array(selmat)
+        avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
+        sel_consensus = np.repeat(False, p)
+        if avg_nsel >= 1:
+            ranksel = np.argsort(np.sum(selmat, axis=0))
+            sel_consensus[ranksel[-avg_nsel:]] = True
+        sel = sel_consensus
     return sel
 
+#@profile
 def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
@@ -248,6 +272,7 @@ def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     Cmat = np.sqrt(w)[:, None] * v.T
     return Cmat
 
+#@profile
 def getknockoffs_qr(X, G, svec, Qx,
                     N, p, Utilde=None, Ginv=None, Cmat=None, tol=1e-7):
     if Utilde is None:

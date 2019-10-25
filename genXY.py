@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg
 
+rng = np.random.default_rng()
 
 def get_fdpfunc(beta, tol=1e-8):
     abs_beta = np.abs(beta)
@@ -46,10 +47,13 @@ def get_2block(p, k, rho):
     return ret
 
 def gen_Y(X, N, beta, sigma=1):
-    return np.dot(X, beta) + np.random.normal(size=N, scale=sigma)
+    # np.random.normal(size=N, scale=sigma)
+    return np.dot(X, beta) + rng.normal(scale=sigma, size=N)
+
 
 def gen_X(N, p, SigmaChol, scale=True, center=True):
-    X = np.random.normal(size = (N, p))
+    X = rng.standard_normal(size=(N,p))
+    # np.random.normal(size = (N, p))
     X = np.matmul(X, SigmaChol.T)
     if center:
         xmeans = np.mean(X, axis=0)
@@ -60,7 +64,8 @@ def gen_X(N, p, SigmaChol, scale=True, center=True):
     return X
 
 def gen_X_given_Gram(N, p, SigmaChol, scale=True, center=True):
-    X = np.random.normal(size = (N, p))
+    X = rng.standard_normal(size=(N,p))
+    #np.random.normal(size = (N, p))
     X, _, _ = np.linalg.svd(X, 0)
     X = np.dot(X, SigmaChol.T)
     if center:
@@ -72,10 +77,12 @@ def gen_X_given_Gram(N, p, SigmaChol, scale=True, center=True):
     return X
 
 def rand_beta_flat(p, k, effsize):
-    nonz_ix = np.random.choice(np.arange(p), size=k, replace=False)
+    #np.random.choice(np.arange(p), size=k, replace=False)
+    nonz_ix = rng.choice(np.arange(p), size=k, replace=False)
     beta = np.zeros(p)
     beta[nonz_ix] = effsize
-    signs = np.random.binomial(1, 0.5, size=k) * 2 - 1
+    # np.random.binomial(1, 0.5, size=k) * 2 - 1
+    signs = rng.binomial(n=1,p=0.5,size=k) * 2 - 1
     beta[nonz_ix] *= signs
     return beta
 
