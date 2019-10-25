@@ -14,6 +14,7 @@ def sim_wrank(N, p, k, rho, corstr, FDR, offset, nW,
     fdp = gen.get_fdpfunc(beta)
     tpr = gen.get_tprfunc(beta)
     fname = "wrank-" + tag + "-nx" + str(nsim_x) + "-nyx" + str(nsim_yx)
+    fname += "-nuyx" + str(nsim_uyx)
     fname += '-N' + str(N) + '-p' + str(p)
     fname += '-w' + wtype + '-nW'+ str(nW) + '-ar1-rho' + str(rho) + '-off' + str(offset)
     fname += '.csv'
