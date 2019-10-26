@@ -88,7 +88,7 @@ def norm2_utheta_y(theta, ut1, ut2, Y, ut1T_Y=None, ut2T_Y=None):
 
 def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
     if tseq is None:
-        tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 100)
+        tseq = np.linspace((1/4)*np.pi, (3/4)*np.pi, 200)
     y2n = np.sum(Y**2)
     QtY = np.matmul(Qx.T, Y)
     Yresid = Y - np.matmul(Qx, QtY)
@@ -200,10 +200,11 @@ def knockoff_threshold(Wstat, q, offset):
 def doKnockoff(X, Y, q, offset=1,
                 stype='ldet', svec=None, wstat='ols',
                 scale = True, center=True,
-                Utilde=None, nrep=1,
+                utype = 'random',
+                Utilde = None, nrep=1,
                 Qx=None, Rx=None, Ginv=None, G=None,
                 Cmat=None,
-                tol=1e-10):
+                tol=1e-10, returnW = False):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
@@ -215,8 +216,6 @@ def doKnockoff(X, Y, q, offset=1,
         Qx, Rx = np.linalg.qr(X, mode='reduced')
     if G is None:
         G = np.matmul(Rx.T, Rx)
-    if Cmat is None:
-        Cmat = get_cmat(X, svec, G, Ginv, tol)
     if svec is None:
         if stype == 'ldet':
             svec = get_svec_ldet(G)
@@ -224,6 +223,8 @@ def doKnockoff(X, Y, q, offset=1,
             svec = get_svec_equi(G)
         else:
             svec = get_svec_ldet(G)
+    if Cmat is None:
+        Cmat = get_cmat(X, svec, G, Ginv, tol)
     if wstat == 'ols':
         Wfunc = stat_ols
     elif wstat=='crossprod':
@@ -235,6 +236,14 @@ def doKnockoff(X, Y, q, offset=1,
     else:
         Wfunc = stat_crossprod
     if nrep < 2:
+        if Utilde is None:
+            if utype == 'random':
+                Utilde = get_util_random(Qx, N, p)
+            elif utype == 'varfrac':
+                Utilde = get_utheta_fixfrac(Qx, N, p,Y,Rx)
+            else:
+                print("utype not recognized, using random")
+                Utilde = get_util_random(Qx, N, p)
         Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
                     Utilde, Ginv, Cmat)
         W = Wfunc(X, Xtilde, Y)
@@ -244,7 +253,7 @@ def doKnockoff(X, Y, q, offset=1,
         selmat = []
         for i in range(nrep):
             Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
-                        Utilde=None, Ginv=Ginv, Cmat=Cmat,
+                        Utilde = None, Ginv=Ginv, Cmat=Cmat,
                         tol=tol)
             W = Wfunc(X, Xtilde, Y)
             thresh = knockoff_threshold(W, q, offset)
@@ -257,7 +266,10 @@ def doKnockoff(X, Y, q, offset=1,
             ranksel = np.argsort(np.sum(selmat, axis=0))
             sel_consensus[ranksel[-avg_nsel:]] = True
         sel = sel_consensus
-    return sel
+    if returnW and nrep < 2:
+        return sel, W
+    else:
+        return sel
 
 
 def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
