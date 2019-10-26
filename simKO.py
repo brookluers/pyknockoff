@@ -3,6 +3,7 @@ import genXY as gen
 import numpy as np
 import scipy
 import pandas as pd
+import argparse
 
 np.set_printoptions(precision=5, suppress=True)
 
@@ -142,32 +143,53 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 
 
 if __name__ == "__main__":
-
-    # Sample size
-    N = 3000
-
-    # Number of features
-    p = 40
-
-    # Correlation between each active variable and its paired confounder
-    rho = 0.5
-    # Target FDR
-    FDR = 0.1
-
-    # Effect size
-    es = 3.5
-    rng = np.random.default_rng(123)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("N", help="sample size", type=int)
+    parser.add_argument("p", help="num. features", type=int)
+    parser.add_argument("k", help = "true num. non-null features", type=int)
+    parser.add_argument("rho", help="pop. correlation among features",type=float)
+    parser.add_argument("nsim_x", help="num. X monte carlo reps",
+    type=int)
+    parser.add_argument("-nW", help="num. W vectors (knockoff selections) for fixed (X, Y)", type=int, default=1)
+    parser.add_argument("-fdr", help="target FDR",
+    type=float, default=0.1)
+    parser.add_argument("-offset", help="one or zero, for Knockoffs+ or Knockoffs", type=int, default=0)
+    parser.add_argument("-corstr", help="correlation structure",
+        choices=['ar1','exch'], default='ar1')
+    parser.add_argument("-effsize", help="mangitude of true effects",
+    type=float, default=3.5)
+    parser.add_argument("-nsim_yx", help="num. Y | X monte carlo reps", type=int, default=1)
+    parser.add_argument("-nsim_uyx", help="num. (Utilde) | (Y,X) monte carlo reps", type=int, default=1)
+    parser.add_argument("-wtype", nargs='+',
+            help="importance statistic, either crossprod, ols, lasso_coef, or lasso_coefIC",
+            choices=['crossprod','ols','lasso_coef','lasso_coefIC'],
+            default=['crossprod', 'ols'])
+    parser.add_argument("-stype", nargs='+',
+            help="s_1..s_p tuning",
+            choices=['ldet','equi'],
+            default=['equi','ldet'])
+    parser.add_argument("-utype", help='type of utilde matrix',
+            choices=['random','varfrac'], default='random')
+    parser.add_argument('-seed', help='rng seed', type=int)
+    parser.add_argument('-saveW', help='save W statistics?',
+        type=bool, default=False)
+    parser.add_argument('-ftag', help='append to output file name',
+        default='')
+    args = parser.parse_args()
+    N, p, k, rho= (args.N, args.p, args.k, args.rho)
+    offset, corstr, FDR, es = (args.offset, args.corstr, args.fdr, args.effsize)
+    wtypes, stypes = (args.wtype, args.stype)
+    nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
+    ftag = args.ftag
+    ftag += '-seed' + str(args.seed) if args.seed else ''
+    rng = np.random.default_rng(args.seed)
     ko.rng = rng
     gen.rng = rng
-    offset = 0
-    k = 20
-    nsim_x = 10
-    nsim_yx = 1
-    nsim_uyx = 1
-    nW = 1
-    rslt = kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
-                effsize=es, nW=nW, FDR=FDR, offset=offset, corstr='ar1',
-                betatype = 'flat',
-                stypes = ['equi', 'ldet'],
-                wtypes = ['ols', 'crossprod'],
-                utype = 'random', saveW=False)
+    saveW, utype = (args.saveW, args.utype)
+
+    rslt = kosim(nsim_x=nsim_x, nsim_yx=nsim_yx,
+                nsim_uyx=nsim_uyx, N=N, p=p, k=k, rho=rho,
+                effsize=es, nW=nW, FDR=FDR,
+                offset=offset, corstr=corstr,
+                stypes = stypes, wtypes = wtypes,
+                utype = utype , saveW=saveW, tag=ftag)
