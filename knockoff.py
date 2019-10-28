@@ -144,6 +144,7 @@ def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
     b = lfit.coef_
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
+
 def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
@@ -167,7 +168,7 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         right = cp2p
     try:
         b = scipy.linalg.solve(left, right)
-    except (np.linalg.LinAlgError, np.linalg.LinAlgWarning):
+    except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
         b, _, _, _ = scipy.linalg.lstsq(left, right)
     finally:
         b, _, _, _ = scipy.linalg.lstsq(left, right)
