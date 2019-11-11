@@ -37,6 +37,7 @@ def get_beta(betatype, p, k, effsize):
         beta = gen.rand_beta_flat(p, k, effsize)
     return beta
 
+
 def power_method(A, p, startvec, niter=10):
     ek = startvec
     for _ in range(niter):
@@ -62,6 +63,14 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     start_unit = np.repeat(1/p, p)
     start_unit = start_unit / np.linalg.norm(start_unit)
     beta = get_beta(betatype, p, k, effsize)
+    bfn = "beta-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p, k, rho,nW, offset)
+    bfn += '-' + tag
+    if saveW:
+        bfn += '-saveW'
+    bfn += '.csv'
+    bdf = pd.DataFrame({'beta_j': beta, 'j': np.arange(p)})
+    bdf.to_csv(bfn, index = False)
+
     Sigma = get_Sigma(corstr, p, k, rho)
     ppv = gen.get_ppvfunc(beta)
     tpr = gen.get_tprfunc(beta)
@@ -129,7 +138,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     df['wtype'] = [wtypes[wi] for wi in df['wtype_ix'].to_list()]
     df = df.drop(columns=['stype_ix','wtype_ix'])
     if to_csv:
-        fname = "ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p, rho,nW, offset)
+        fname = "ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p,k, rho,nW, offset)
         if betatype != 'flat':
             fname += "-beta" + betatype
         if fixGram:
