@@ -86,6 +86,14 @@ def rand_beta_flat(p, k, effsize):
     beta[nonz_ix] *= signs
     return beta
 
+def rand_beta_seq(p, k, bmin, bmax):
+    nonz_ix = rng.choice(np.arange(p), size=k, replace=False)
+    beta = np.zeros(p)
+    beta[nonz_ix] = np.linspace(bmin, bmax, k)
+    signs = rng.binomial(n=1, p=0.5, size=k) * 2 - 1
+    beta[nonz_ix] *= signs
+    return beta
+
 def fix_beta_first_k(p, k, effsize):
     beta = np.concatenate((np.ones(k), np.zeros(p - k)))
     beta *= effsize

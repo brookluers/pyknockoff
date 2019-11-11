@@ -32,6 +32,11 @@ def get_beta(betatype, p, k, effsize):
         beta = gen.rand_beta_flat(p, k, effsize)
     elif betatype == 'first_k':
         beta = gen.fix_beta_first_k(p, k, effsize)
+    elif betatype == 'seq':
+        brange = 3.3
+        bmin = effsize - brange / 2
+        bmax = effsize + brange / 2
+        beta = gen.rand_beta_seq(p, k, bmin, bmax)
     else:
         print("Unknown betatype, using 'flat'")
         beta = gen.rand_beta_flat(p, k, effsize)
@@ -63,7 +68,8 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     start_unit = np.repeat(1/p, p)
     start_unit = start_unit / np.linalg.norm(start_unit)
     beta = get_beta(betatype, p, k, effsize)
-    bfn = "beta-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p, k, rho,nW, offset)
+    bfn = "beta-" + betatype
+    bfn += "-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p, k, rho,nW, offset)
     bfn += '-' + tag
     if saveW:
         bfn += '-saveW'
@@ -184,10 +190,12 @@ if __name__ == "__main__":
         type=bool, default=False)
     parser.add_argument('-ftag', help='append to output file name',
         default='')
+    parser.add_argument('-btype',help='beta coef pattern',
+        default='flat', choices=['flat','first_k','seq'])
     args = parser.parse_args()
     N, p, k, rho= (args.N, args.p, args.k, args.rho)
     offset, corstr, FDR, es = (args.offset, args.corstr, args.fdr, args.effsize)
-    wtypes, stypes = (args.wtype, args.stype)
+    wtypes, stypes, betatype = (args.wtype, args.stype, args.btype)
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
     ftag = args.ftag
     ftag += '-seed' + str(args.seed) if args.seed else ''
@@ -200,5 +208,6 @@ if __name__ == "__main__":
                 nsim_uyx=nsim_uyx, N=N, p=p, k=k, rho=rho,
                 effsize=es, nW=nW, FDR=FDR,
                 offset=offset, corstr=corstr,
+                betatype = betatype,
                 stypes = stypes, wtypes = wtypes,
                 utype = utype , saveW=saveW, tag=ftag)
