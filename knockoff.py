@@ -66,6 +66,11 @@ def get_svec_ldet(G, tol=1e-8, maxiter=2000, minEV = None, startval=None, verbos
     svec = ldopt.x
     return svec
 
+def get_util_fixed(Qx, N, p, *args):
+    znp = np.zeros((N, p))
+    utraw = np.concatenate((Qx, znp), axis=1)
+    Qx0, Rx0 = np.linalg.qr(utraw, mode='reduced')
+    return Qx0[:,p:]
 
 def get_util_random(Qx, N, p, *args):
     Utilde_raw = rng.standard_normal(size=(N,p))
@@ -197,6 +202,46 @@ def knockoff_threshold(Wstat, q, offset):
     else:
         return Wabs[np.argmax(ok_pos)]
 
+def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
+            N, p, q, offset,Wfunc,
+            type='bootThresh', tol=1e-10):
+    selmat = []
+    Wmat = []
+    for i in range(nrep):
+        Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+                    Utilde = None, Ginv=Ginv, Cmat=Cmat,
+                    tol=tol)
+        W = Wfunc(X, Xtilde, Y)
+        Wmat.append(W)
+        thresh = knockoff_threshold(W, q, offset)
+        sel_i = np.array([W[j] >= thresh for j in range(p)])
+        selmat.append(sel_i)
+    selmat = np.array(selmat)
+    ranksel = np.argsort(np.sum(selmat, axis=0))
+    Wmat = np.array(Wmat)
+    sel_consensus = np.repeat(False, p)
+    if type == 'avg_nsel':
+        avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
+        if avg_nsel >= 1:
+            sel_consensus[ranksel[-avg_nsel:]] = True
+    else:
+        tmax = 0
+        ngrid = 5
+        wmax = np.max(Wmat)
+        testThresh = np.linspace(0, wmax, ngrid)
+        prevMax = wmax
+        while (abs(prevMax - tmax) / prevMax) > 1e-5:
+            bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
+            bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
+            tix = np.argmax((bootNumer / bootDenom ) <= q)
+            prevMax = tmax
+            tmax = testThresh[tix+1]
+            ngrid = np.ceil(ngrid * 1.4)
+            testThresh = np.linspace(testThresh[tix-1], tmax, ngrid)
+        cutoff_ix = int(np.mean(np.sum(Wmat >= tmax, axis=1)))
+        if cutoff_ix > 0:
+            sel_consensus[ranksel[-cutoff_ix:]] = True
+    return sel_consensus
 
 def doKnockoff(X, Y, q, offset=1,
                 stype='ldet', svec=None, wstat='ols',
@@ -205,7 +250,8 @@ def doKnockoff(X, Y, q, offset=1,
                 Utilde = None, nrep=1,
                 Qx=None, Rx=None, Ginv=None, G=None,
                 Cmat=None,
-                tol=1e-10, returnW = False):
+                tol=1e-10, returnW = False,
+                bootType = 'avg_nsel'):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
@@ -240,6 +286,8 @@ def doKnockoff(X, Y, q, offset=1,
         if Utilde is None:
             if utype == 'random':
                 Utilde = get_util_random(Qx, N, p)
+            elif utype == 'fixed':
+                Utilde = get_util_fixed(Qx, N, p)
             elif utype == 'varfrac':
                 Utilde = get_utheta_fixfrac(Qx, N, p,Y,Rx)
             else:
@@ -251,22 +299,10 @@ def doKnockoff(X, Y, q, offset=1,
         thresh = knockoff_threshold(W, q, offset)
         sel = np.array([W[j] >= thresh for j in range(p)])
     else:
-        selmat = []
-        for i in range(nrep):
-            Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
-                        Utilde = None, Ginv=Ginv, Cmat=Cmat,
-                        tol=tol)
-            W = Wfunc(X, Xtilde, Y)
-            thresh = knockoff_threshold(W, q, offset)
-            sel_i = np.array([W[j] >= thresh for j in range(p)])
-            selmat.append(sel_i)
-        selmat = np.array(selmat)
-        avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
-        sel_consensus = np.repeat(False, p)
-        if avg_nsel >= 1:
-            ranksel = np.argsort(np.sum(selmat, axis=0))
-            sel_consensus[ranksel[-avg_nsel:]] = True
-        sel = sel_consensus
+        sel = bootKO(nrep, X, Y, G, Ginv, Cmat, svec,
+                    Qx, N, p, q,
+                    offset, Wfunc,
+                    type=bootType, tol=tol)
     if returnW and nrep < 2:
         return sel, W
     else:

@@ -4,6 +4,7 @@ import numpy as np
 import scipy
 import pandas as pd
 import argparse
+import sys
 
 np.set_printoptions(precision=5, suppress=True)
 
@@ -57,7 +58,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             betatype = 'flat',
             stypes = ['equi', 'ldet'],
             wtypes = ['ols', 'crossprod'],
-            utype = 'random',
+            utype = 'random', bootType='bootThresh',
             scale=True, center=True,
              fixGram = False, to_csv = True, tag='',
              saveW = False):
@@ -130,7 +131,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                     scale=False, center=False,
                     utype=utype, nrep=nW,
                     Qx=Qx, Rx=Rx, Ginv=Ginv, G=G,
-                    Cmat=cm, returnW=saveW
+                    Cmat=cm, returnW=saveW, bootType=bootType
                     ) for wstat in wtypes for (svec, cm) in zip(slist, cmlist) ]
                 if saveW:
                     rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]),s,w,ix)) for ((s,w), ix) in zip(selWlist, sw_ix)])
@@ -184,7 +185,7 @@ if __name__ == "__main__":
             choices=['ldet','equi'],
             default=['equi','ldet'])
     parser.add_argument("-utype", help='type of utilde matrix',
-            choices=['random','varfrac'], default='random')
+            choices=['random','varfrac','fixed'], default='random')
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
@@ -192,22 +193,30 @@ if __name__ == "__main__":
         default='')
     parser.add_argument('-btype',help='beta coef pattern',
         default='flat', choices=['flat','first_k','seq'])
+    parser.add_argument('-bootType', help='type of bootstrap aggregation of Knockoff selections',
+        default='bootThresh', choices=['bootThresh','avg_nsel'])
     args = parser.parse_args()
     N, p, k, rho= (args.N, args.p, args.k, args.rho)
     offset, corstr, FDR, es = (args.offset, args.corstr, args.fdr, args.effsize)
     wtypes, stypes, betatype = (args.wtype, args.stype, args.btype)
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
+    bootType = args.bootType
     ftag = args.ftag
+    ftag += '-ufixed' if args.utype == 'fixed' else ''
+    ftag += '-utvfrac' if args.utype == 'varfrac' else ''
+    ftag += '-' + bootType if nW > 1 else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     rng = np.random.default_rng(args.seed)
     ko.rng = rng
     gen.rng = rng
     saveW, utype = (args.saveW, args.utype)
-
+    if nW > 1 and utype =='fixed':
+        sys.exit("if utype is fixed, nW must be 1")
     rslt = kosim(nsim_x=nsim_x, nsim_yx=nsim_yx,
                 nsim_uyx=nsim_uyx, N=N, p=p, k=k, rho=rho,
                 effsize=es, nW=nW, FDR=FDR,
                 offset=offset, corstr=corstr,
                 betatype = betatype,
                 stypes = stypes, wtypes = wtypes,
-                utype = utype , saveW=saveW, tag=ftag)
+                utype = utype , bootType=bootType,
+                saveW=saveW, tag=ftag)
