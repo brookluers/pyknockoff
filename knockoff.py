@@ -227,17 +227,21 @@ def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
     else:
         ngrid = 20
         wmax = np.max(Wmat)
-        testThresh = np.linspace(0, wmax, ngrid)
+        testThresh = np.linspace(1e-7, wmax, ngrid)
         tmax = 1e-6
         prevMax = wmax
         while (abs(prevMax - tmax) / prevMax) > 1e-4:
             bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
             bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
-            tix = np.argmax((bootNumer / bootDenom ) <= q)
+            anyLess = (bootNumer / bootDenom) <= q
+            if np.sum(anyLess) < 1:
+                tmax = np.inf
+                break
+            tix = np.argmax(anyLess)
             prevMax = tmax
-            tmax = testThresh[tix+1]
-            testThresh = np.linspace(testThresh[tix-1], tmax, ngrid)
-        cutoff_ix = int(np.mean(np.sum(Wmat >= tmax, axis=1)))
+            tmax = testThresh[tix]
+            testThresh = np.linspace(testThresh[max(0, tix-2)], tmax, ngrid)
+        cutoff_ix = int(np.round(np.mean(np.sum(Wmat >= tmax, axis=1))))
         ranksel = np.argsort(np.mean(Wmat >= tmax, axis=0))
         if cutoff_ix > 0:
             sel_consensus[ranksel[-cutoff_ix:]] = True
