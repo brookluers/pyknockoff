@@ -217,28 +217,28 @@ def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
         sel_i = np.array([W[j] >= thresh for j in range(p)])
         selmat.append(sel_i)
     selmat = np.array(selmat)
-    ranksel = np.argsort(np.sum(selmat, axis=0))
     Wmat = np.array(Wmat)
     sel_consensus = np.repeat(False, p)
     if type == 'avg_nsel':
+        ranksel = np.argsort(np.sum(selmat, axis=0))
         avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
         if avg_nsel >= 1:
             sel_consensus[ranksel[-avg_nsel:]] = True
     else:
-        tmax = 0
-        ngrid = 5
+        ngrid = 20
         wmax = np.max(Wmat)
         testThresh = np.linspace(0, wmax, ngrid)
+        tmax = 1e-6
         prevMax = wmax
-        while (abs(prevMax - tmax) / prevMax) > 1e-5:
+        while (abs(prevMax - tmax) / prevMax) > 1e-4:
             bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
             bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
             tix = np.argmax((bootNumer / bootDenom ) <= q)
             prevMax = tmax
             tmax = testThresh[tix+1]
-            ngrid = np.ceil(ngrid * 1.4)
             testThresh = np.linspace(testThresh[tix-1], tmax, ngrid)
         cutoff_ix = int(np.mean(np.sum(Wmat >= tmax, axis=1)))
+        ranksel = np.argsort(np.mean(Wmat >= tmax, axis=0))
         if cutoff_ix > 0:
             sel_consensus[ranksel[-cutoff_ix:]] = True
     return sel_consensus
@@ -251,7 +251,7 @@ def doKnockoff(X, Y, q, offset=1,
                 Qx=None, Rx=None, Ginv=None, G=None,
                 Cmat=None,
                 tol=1e-10, returnW = False,
-                bootType = 'avg_nsel'):
+                bootType = 'bootThresh'):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
