@@ -185,7 +185,7 @@ if __name__ == "__main__":
             choices=['ldet','equi'],
             default=['equi','ldet'])
     parser.add_argument("-utype", help='type of utilde matrix',
-            choices=['random','varfrac','fixed'], default='random')
+            choices=['random','varfrac','runif', 'fixed'], default='random')
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
@@ -204,6 +204,7 @@ if __name__ == "__main__":
     ftag = args.ftag
     ftag += '-ufixed' if args.utype == 'fixed' else ''
     ftag += '-utvfrac' if args.utype == 'varfrac' else ''
+    ftag += '-urunif' if args.utype == 'runif' else ''
     ftag += '-' + bootType if nW > 1 else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     rng = np.random.default_rng(args.seed)
