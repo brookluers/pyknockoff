@@ -78,6 +78,17 @@ def get_util_random(Qx, N, p, *args):
     Utilde, Ru = np.linalg.qr(Utilde_raw, mode='reduced')
     return Utilde
 
+def get_util_runif(Qx, N, p, *args):
+    Z = rng.standard_normal(size=(N, p))
+    d, v = np.linalg.eig(np.matmul(Z.T, Z))
+    # (Z^t Z)^(-1/2)
+    zti = np.matmul(v * 1 / np.sqrt(d), v.T)
+    U0 = np.matmul(Z, zti)
+    U0 -= np.matmul(Qx, np.matmul(Qx.T, U0))
+    Util, _ = np.linalg.qr(U0, mode='reduced')
+    return Util
+
+
 def norm2_utheta_y(theta, ut1, ut2, Y, ut1T_Y=None, ut2T_Y=None):
     sintheta = np.sin(theta)
     costheta = np.cos(theta)
@@ -229,7 +240,7 @@ def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
         wmax = np.max(Wmat)
         testThresh = np.linspace(1e-7, wmax, ngrid)
         tmax = 1e-6
-        prevMax = wmax
+        prevMax = wmax # prevMax will decrease
         while (abs(prevMax - tmax) / prevMax) > 1e-4:
             bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
             bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
@@ -290,6 +301,8 @@ def doKnockoff(X, Y, q, offset=1,
         if Utilde is None:
             if utype == 'random':
                 Utilde = get_util_random(Qx, N, p)
+            elif utype == 'runif':
+                Utilde = get_util_runif(Qx, N, p)
             elif utype == 'fixed':
                 Utilde = get_util_fixed(Qx, N, p)
             elif utype == 'varfrac':
