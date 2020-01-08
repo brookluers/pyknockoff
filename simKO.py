@@ -207,6 +207,7 @@ if __name__ == "__main__":
     ftag += '-urunif' if args.utype == 'runif' else ''
     ftag += '-' + bootType if nW > 1 else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
+    ftag += '-es' + str(args.effsize) if args.effsize else ''
     rng = np.random.default_rng(args.seed)
     ko.rng = rng
     gen.rng = rng
