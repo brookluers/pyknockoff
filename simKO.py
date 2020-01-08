@@ -102,10 +102,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     vheader = ['jx','jyx','juyx', 'fdp', 'tpr', 'fpr', 'ppv']
     vheader.extend(["sel{:d}".format(i) for i in range(p)])
     if saveW:
-        if nW == 1:
+        if nW == 1 or utype=='split':
             vheader.extend(["W{:d}".format(i) for i in range(p)])
         else:
-            print("cannot save W when nW > 1")
+            print("cannot save W when nW > 1 and not doing split-sample")
             saveW = False
     vheader.extend(['wtype_ix', 'stype_ix'])
     vheader.extend(['N','p','k','rho','offset','FDR','nW'])
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             choices=['ldet','equi'],
             default=['equi','ldet'])
     parser.add_argument("-utype", help='type of utilde matrix',
-            choices=['random','varfrac','runif', 'fixed'], default='random')
+            choices=['random','varfrac','runif', 'fixed', 'split'], default='random')
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
@@ -201,17 +201,15 @@ if __name__ == "__main__":
     wtypes, stypes, betatype = (args.wtype, args.stype, args.btype)
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
     bootType = args.bootType
+    saveW, utype = (args.saveW, args.utype)
     ftag = args.ftag
-    ftag += '-ufixed' if args.utype == 'fixed' else ''
-    ftag += '-utvfrac' if args.utype == 'varfrac' else ''
-    ftag += '-urunif' if args.utype == 'runif' else ''
-    ftag += '-' + bootType if nW > 1 else ''
+    ftag += '-u' + args.utype if args.utype != 'random' else ''
+    ftag += '-' + bootType if nW > 1 and utype != 'split' else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     ftag += '-es' + str(args.effsize) if args.effsize else ''
     rng = np.random.default_rng(args.seed)
     ko.rng = rng
     gen.rng = rng
-    saveW, utype = (args.saveW, args.utype)
     if nW > 1 and utype =='fixed':
         sys.exit("if utype is fixed, nW must be 1")
     rslt = kosim(nsim_x=nsim_x, nsim_yx=nsim_yx,

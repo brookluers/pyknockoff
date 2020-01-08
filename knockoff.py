@@ -258,6 +258,87 @@ def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
             sel_consensus[ranksel[-cutoff_ix:]] = True
     return sel_consensus
 
+def doKnockoffSplitSample(X, Y, q, nsplit = 100, offset=1,
+                          stype = 'ldet', svec = None,
+                          wstat='ols', scale = True, center=True,
+                          tol=1e-10, returnW = False):
+    N, p = X.shape
+    ixN = np.arange(N)
+    ixnew = rng.permutation(ixN)
+    if N % 2 != 0:
+        ixnew = ixnew[0:-1]
+        X = X[ixnew,:]
+        N = X.shape[0]
+    X1 = X[ixnew[0:int(N/2)],:]
+    X2 = X[ixnew[int(N/2):],:]
+    if center:
+        x1means = np.mean(X1, axis=0)
+        x2means = np.mean(X2, axis=0)
+        X1 = X1 - x1means
+        X2 = X2 - x2means
+    if scale:
+        x1norms = scipy.linalg.norm(X1, axis=0)
+        x2norms = scipy.linalg.norm(X2, axis=0)
+        X1 = X1 / x1norms
+        X2 = X2 / x2norms
+    Y1 = Y[ixnew[0:int(N/2)]]
+    Y2 = Y[ixnew[int(N/2):]]
+    X12 = np.concatenate((X1,X2), axis=1)
+    Q12 , _ = np.linalg.qr(X12, mode='reduced')
+    Q1, R1 = np.linalg.qr(X1, mode='reduced')
+    Q2, R2 = np.linalg.qr(X2, mode='reduced')
+    G1 = np.matmul(R1.T, R1)
+    G2 = np.matmul(R2.T, R2)
+    G1i = scipy.linalg.inv(G1)
+    G2i = scipy.linalg.inv(G2)
+    if stype == 'ldet':
+        sv1 = get_svec_ldet(G1)
+        sv2 = get_svec_ldet(G2)
+    elif stype == 'equi':
+        sv1 = get_svec_equi(G1)
+        sv2 = get_svec_equi(G2)
+    else:
+        sv1 = get_svec_ldet(G1)
+        sv2 = get_svec_ldet(G2)
+    C1 = get_cmat(X1, sv1, G1, G1i, tol)
+    C2 = get_cmat(X2, sv2, G2, G2i, tol)
+    if wstat == 'ols':
+        Wfunc = stat_ols
+    elif wstat=='crossprod':
+        Wfunc = stat_crossprod
+    elif wstat == 'lasso_coef':
+        Wfunc = stat_lasso_coef
+    elif wstat == 'lasso_coefIC':
+        Wfunc = stat_lassoLarsIC_coef
+    else:
+        Wfunc = stat_crossprod
+    Ut1best = None
+    nselbest = -1
+    selbest = None
+    for i in np.arange(nsplit):
+        Utilde_raw = rng.standard_normal(size=X1.shape)
+        Utilde_raw -= np.matmul(Q12, np.matmul(Q12.T, Utilde_raw))
+        Utilde, Ru = np.linalg.qr(Utilde_raw, mode='reduced')
+        Xtilde1 = getknockoffs_qr(X1, G1, sv1,
+                                  Q1, X1.shape[0], p, Utilde, G1i, C1)
+        W1 = Wfunc(X1, Xtilde1, Y1)
+        thresh = knockoff_threshold(W1, q, offset)
+        sel = np.array([W1[j] >= thresh for j in range(p)])
+        nsel_cur = np.sum(sel)
+        if nsel_cur > nselbest:
+            nselbest = nsel_cur
+            selbest = sel
+            Ut1best = Utilde
+    Xtilde2 = getknockoffs_qr(X2, G2, sv2,
+                              Q2, X2.shape[0], p, Ut1best, G2i, C2)
+    W2 = Wfunc(X2, Xtilde2, Y2)
+    thresh2 = knockoff_threshold(W2, q, offset)
+    sel2 = np.array([W2[j] >= thresh2 for j in range(p)])
+    if returnW:
+        return sel2, W2
+    else:
+        return sel2
+
 def doKnockoff(X, Y, q, offset=1,
                 stype='ldet', svec=None, wstat='ols',
                 scale = True, center=True,
@@ -316,11 +397,18 @@ def doKnockoff(X, Y, q, offset=1,
         thresh = knockoff_threshold(W, q, offset)
         sel = np.array([W[j] >= thresh for j in range(p)])
     else:
-        sel = bootKO(nrep, X, Y, G, Ginv, Cmat, svec,
+        if utype == 'split':
+            sel, W = doKnockoffSplitSample(X, Y, q, nsplit=nrep,
+                                           offset=offset, stype=stype,
+                                           svec = svec, wstat=wstat,
+                                           scale=True, center=True,
+                                           returnW = True)
+        else:
+            sel = bootKO(nrep, X, Y, G, Ginv, Cmat, svec,
                     Qx, N, p, q,
                     offset, Wfunc,
                     type=bootType, tol=tol)
-    if returnW and nrep < 2:
+    if returnW and (nrep < 2 or utype=='split'):
         return sel, W
     else:
         return sel
