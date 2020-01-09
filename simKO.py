@@ -177,9 +177,9 @@ if __name__ == "__main__":
     parser.add_argument("-nsim_yx", help="num. Y | X monte carlo reps", type=int, default=1)
     parser.add_argument("-nsim_uyx", help="num. (Utilde) | (Y,X) monte carlo reps", type=int, default=1)
     parser.add_argument("-wtype", nargs='+',
-            help="importance statistic, either crossprod, ols, lasso_coef, or lasso_coefIC",
-            choices=['crossprod','ols','lasso_coef','lasso_coefIC'],
-            default=['crossprod', 'ols'])
+            help="importance statistic",
+            choices=['crossprod','ols','lasso_coef','lasso_coefIC', 'ridge'],
+            default=['crossprod', 'lasso_coefIC'])
     parser.add_argument("-stype", nargs='+',
             help="s_1..s_p tuning",
             choices=['ldet','equi'],

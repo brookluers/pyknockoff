@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import minimize, Bounds, check_grad, approx_fprime
 import scipy.linalg
 from sklearn.linear_model import LassoCV
+from sklearn.linear_model import RidgeCV
 from sklearn.linear_model import LassoLarsIC
 
 rng = np.random.default_rng()
@@ -160,6 +161,15 @@ def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
     b = lfit.coef_
     return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
+def stat_ridge_coef(X, Xk, Y, n_alphas = 20):
+    N, p = X.shape
+    XXk = np.concatenate((X, Xk), axis=1)
+    cp2p = np.matmul(XXk.T,Y)
+    alphas = get_alphas_lasso(cp2p, n_alphas, N)
+    rfit = RidgeCV(alphas, fit_intercept=False,
+                normalize=False).fit(XXk, Y)
+    b = rfit.coef_
+    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
 
 def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
     p = X.shape[1]
@@ -184,12 +194,14 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         right = cp2p
     try:
         b = scipy.linalg.solve(left, right)
+        ret = np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
     except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        b, _, _, _ = scipy.linalg.lstsq(left, right)
-    finally:
-        b, _, _, _ = scipy.linalg.lstsq(left, right)
-    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
-
+        # b, _, _, _ = scipy.linalg.lstsq(left, right)
+        print("singular OLS, returning cross products")
+        aXYcp = np.abs(np.matmul(X.T, Y))
+        aXkYcp = np.abs(np.matmul(Xk.T, Y))
+        ret = np.array(aXYcp - aXkYcp)
+    return ret
 
 def stat_crossprod(X, Xk, Y, cp2p=None):
     p = X.shape[1]
@@ -200,7 +212,6 @@ def stat_crossprod(X, Xk, Y, cp2p=None):
         aXYcp = np.abs(cp2p[0:p])
         aXkYcp = np.abs(cp2p[p:(2*p)])
     return np.array(aXYcp - aXkYcp)
-
 
 def knockoff_threshold(Wstat, q, offset):
     Wabs = np.sort(np.abs(Wstat))
@@ -258,7 +269,7 @@ def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
             sel_consensus[ranksel[-cutoff_ix:]] = True
     return sel_consensus
 
-def doKnockoffSplitSample(X, Y, q, nsplit = 100, offset=1,
+def doKnockoffSplitSample(X, Y, q, nU = 100, offset=1,
                           stype = 'ldet', svec = None,
                           wstat='ols', scale = True, center=True,
                           tol=1e-10, returnW = False):
@@ -304,6 +315,8 @@ def doKnockoffSplitSample(X, Y, q, nsplit = 100, offset=1,
     C2 = get_cmat(X2, sv2, G2, G2i, tol)
     if wstat == 'ols':
         Wfunc = stat_ols
+    elif wstat == 'ridge':
+        Wfunc = stat_ridge_coef
     elif wstat=='crossprod':
         Wfunc = stat_crossprod
     elif wstat == 'lasso_coef':
@@ -311,11 +324,12 @@ def doKnockoffSplitSample(X, Y, q, nsplit = 100, offset=1,
     elif wstat == 'lasso_coefIC':
         Wfunc = stat_lassoLarsIC_coef
     else:
+        print("unknown wtype, using cross product")
         Wfunc = stat_crossprod
     Ut1best = None
     nselbest = -1
     selbest = None
-    for i in np.arange(nsplit):
+    for i in np.arange(nU):
         Utilde_raw = rng.standard_normal(size=X1.shape)
         Utilde_raw -= np.matmul(Q12, np.matmul(Q12.T, Utilde_raw))
         Utilde, Ru = np.linalg.qr(Utilde_raw, mode='reduced')
@@ -370,6 +384,8 @@ def doKnockoff(X, Y, q, offset=1,
         Cmat = get_cmat(X, svec, G, Ginv, tol)
     if wstat == 'ols':
         Wfunc = stat_ols
+    elif wstat == 'ridge':
+        Wfunc = stat_ridge_coef
     elif wstat=='crossprod':
         Wfunc = stat_crossprod
     elif wstat == 'lasso_coef':
@@ -377,6 +393,7 @@ def doKnockoff(X, Y, q, offset=1,
     elif wstat == 'lasso_coefIC':
         Wfunc = stat_lassoLarsIC_coef
     else:
+        print("unknown wtype, using cross product")
         Wfunc = stat_crossprod
     if nrep < 2:
         if Utilde is None:
@@ -398,7 +415,7 @@ def doKnockoff(X, Y, q, offset=1,
         sel = np.array([W[j] >= thresh for j in range(p)])
     else:
         if utype == 'split':
-            sel, W = doKnockoffSplitSample(X, Y, q, nsplit=nrep,
+            sel, W = doKnockoffSplitSample(X, Y, q, nU=nrep,
                                            offset=offset, stype=stype,
                                            svec = svec, wstat=wstat,
                                            scale=True, center=True,
