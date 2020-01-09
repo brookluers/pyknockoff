@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds, check_grad, approx_fprime
 import scipy.linalg
+import warnings
 from sklearn.linear_model import LassoCV
 from sklearn.linear_model import RidgeCV
 from sklearn.linear_model import LassoLarsIC
@@ -192,15 +193,17 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
     else:
         left = G2p
         right = cp2p
-    try:
-        b = scipy.linalg.solve(left, right)
-        ret = np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
-    except (scipy.linalg.LinAlgError, scipy.linalg.LinAlgWarning):
-        # b, _, _, _ = scipy.linalg.lstsq(left, right)
-        print("singular OLS, returning cross products")
-        aXYcp = np.abs(np.matmul(X.T, Y))
-        aXkYcp = np.abs(np.matmul(Xk.T, Y))
-        ret = np.array(aXYcp - aXkYcp)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error')
+        try:
+            b = scipy.linalg.solve(left, right)
+            ret = np.array([abs(b[i]) - abs(b[i + p]) for i in  range(p)])
+        except: # (scipy.linalg.LinAlgError,    scipy.linalg.LinAlgWarning):
+            # b, _, _, _ = scipy.linalg.lstsq(left, right)
+            print("singular OLS, returning cross products")
+            aXYcp = np.abs(np.matmul(X.T, Y))
+            aXkYcp = np.abs(np.matmul(Xk.T, Y))
+            ret = np.array(aXYcp - aXkYcp)
     return ret
 
 def stat_crossprod(X, Xk, Y, cp2p=None):
