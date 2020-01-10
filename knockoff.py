@@ -364,7 +364,8 @@ def doKnockoff(X, Y, q, offset=1,
                 Qx=None, Rx=None, Ginv=None, G=None,
                 Cmat=None,
                 tol=1e-10, returnW = False,
-                bootType = 'bootThresh'):
+                bootType = 'bootThresh',
+                rUUYf = False):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
@@ -430,6 +431,11 @@ def doKnockoff(X, Y, q, offset=1,
                     type=bootType, tol=tol)
     if returnW and (nrep < 2 or utype=='split'):
         return sel, W
+    elif rUUYf:
+        uuy2 = np.sum(np.matmul(Utilde.T,Y)**2)
+        yn2 = np.sum(Y**2)
+        uuyf = uuy2 / yn2
+        return sel, np.array([uuyf])
     else:
         return sel
 

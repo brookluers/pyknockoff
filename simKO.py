@@ -61,7 +61,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             utype = 'random', bootType='bootThresh',
             scale=True, center=True,
              fixGram = False, to_csv = True, tag='',
-             saveW = False):
+             saveW = False, rUUYf = False):
     # Use power iterations to approximate
     # the smallest eigenvalue of X^t X
     # use for log-det and equivariant
@@ -101,11 +101,16 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
 
     vheader = ['jx','jyx','juyx', 'fdp', 'tpr', 'fpr', 'ppv']
     vheader.extend(["sel{:d}".format(i) for i in range(p)])
+    if rUUYf:
+        if saveW:
+            print("cannot save W when returning ||UUY^2||/||Y||^2, ignoring saveW")
+            saveW = False
+        vheader.extend(['uyfrac'])
     if saveW:
         if nW == 1 or utype=='split':
             vheader.extend(["W{:d}".format(i) for i in range(p)])
         else:
-            print("cannot save W when nW > 1 and not doing split-sample")
+            print("cannot save W when nW > 1 and not doing split-sample, ignoring saveW")
             saveW = False
     vheader.extend(['wtype_ix', 'stype_ix'])
     vheader.extend(['N','p','k','rho','offset','FDR','nW'])
@@ -131,10 +136,10 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                     scale=False, center=False,
                     utype=utype, nrep=nW,
                     Qx=Qx, Rx=Rx, Ginv=Ginv, G=G,
-                    Cmat=cm, returnW=saveW, bootType=bootType
+                    Cmat=cm, returnW=saveW, bootType=bootType, rUUYf=rUUYf
                     ) for wstat in wtypes for (svec, cm) in zip(slist, cmlist) ]
-                if saveW:
-                    rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]),s,w,ix)) for ((s,w), ix) in zip(selWlist, sw_ix)])
+                if saveW or rUUYf:
+                    rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]),1 * s, w, ix)) for ((s, w), ix) in zip(selWlist, sw_ix)])
                 else:
                     rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]), 1 * s, ix)) for (s, ix) in zip(selWlist, sw_ix)])
     rslt = np.array(rslt)
@@ -189,6 +194,8 @@ if __name__ == "__main__":
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
+    parser.add_argument('-rUUYf', help='save ||UUY||^2/||Y||^2?',
+        type=bool, default=False)
     parser.add_argument('-ftag', help='append to output file name',
         default='')
     parser.add_argument('-btype',help='beta coef pattern',
@@ -202,9 +209,11 @@ if __name__ == "__main__":
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
     bootType = args.bootType
     saveW, utype = (args.saveW, args.utype)
+    rUUYf = args.rUUYf
     ftag = args.ftag
     ftag += '-u' + args.utype if args.utype != 'random' else ''
     ftag += '-' + bootType if nW > 1 and utype != 'split' else ''
+    ftag += '-uuyf' if rUUYf else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     ftag += '-es' + str(args.effsize) if args.effsize else ''
     rng = np.random.default_rng(args.seed)
@@ -219,4 +228,4 @@ if __name__ == "__main__":
                 betatype = betatype,
                 stypes = stypes, wtypes = wtypes,
                 utype = utype , bootType=bootType,
-                saveW=saveW, tag=ftag)
+                saveW=saveW, tag=ftag, rUUYf = rUUYf)
