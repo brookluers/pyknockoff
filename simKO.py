@@ -69,15 +69,16 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     start_unit = np.repeat(1/p, p)
     start_unit = start_unit / np.linalg.norm(start_unit)
     beta = get_beta(betatype, p, k, effsize)
+    parm_fs = "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}"
+    parm_fs += "-off{:d}" if bootType != 'multiKO' else "-off{:2.3f}"
     bfn = "beta-" + betatype
-    bfn += "-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p, k, rho,nW, offset)
+    bfn += "-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + parm_fs.format(N, p, k, rho, nW, offset)
     bfn += '-' + tag
     if saveW:
         bfn += '-saveW'
     bfn += '.csv'
     bdf = pd.DataFrame({'beta_j': beta, 'j': np.arange(p)})
     bdf.to_csv(bfn, index = False)
-
     Sigma = get_Sigma(corstr, p, k, rho)
     ppv = gen.get_ppvfunc(beta)
     tpr = gen.get_tprfunc(beta)
@@ -94,8 +95,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     elif offset == 0:
         print("Knockoff, offset = {:d}".format(offset))
     else:
-        print("offset must be 0 or 1, setting to 1")
-        offset = 1
+        print("Warning: offset is not zero or one, offset = " + str(offset))
     print("true effects = \n\t" + str(beta))
     print("cov(X)[0:5, 0:5]: \t" + str(Sigma[0:5,0:5]).replace('\n','\n\t\t\t'))
 
@@ -105,7 +105,11 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
         if saveW:
             print("cannot save W when returning ||UUY^2||/||Y||^2, ignoring saveW")
             saveW = False
-        vheader.extend(['uyfrac'])
+        if nW == 1:
+            vheader.extend(['uyfrac'])
+        else:
+            print("cannot return ||UUY^2||/||Y||^2 when nW > 1, ignoring rUUYf")
+            rUUYf = False
     if saveW:
         if nW == 1 or utype=='split':
             vheader.extend(["W{:d}".format(i) for i in range(p)])
@@ -150,7 +154,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     df['wtype'] = [wtypes[wi] for wi in df['wtype_ix'].to_list()]
     df = df.drop(columns=['stype_ix','wtype_ix'])
     if to_csv:
-        fname = "ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + "-N{:d}-p{:d}-k{:d}-rho{:.2f}-nW{:d}-off{:d}".format(N, p,k, rho,nW, offset)
+        fname = "ko-x{:d}-yx{:d}-uyx{:d}-".format(nsim_x,nsim_yx,nsim_uyx) + corstr + parm_fs.format(N, p,k, rho,nW, offset)
         if betatype != 'flat':
             fname += "-beta" + betatype
         if fixGram:
@@ -201,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('-btype',help='beta coef pattern',
         default='flat', choices=['flat','first_k','seq'])
     parser.add_argument('-bootType', help='type of bootstrap aggregation of Knockoff selections',
-        default='bootThresh', choices=['bootThresh','avg_nsel'])
+        default='bootThresh', choices=['bootThresh','avg_nsel','multiKO'])
     args = parser.parse_args()
     N, p, k, rho= (args.N, args.p, args.k, args.rho)
     offset, corstr, FDR, es = (args.offset, args.corstr, args.fdr, args.effsize)
@@ -211,9 +215,13 @@ if __name__ == "__main__":
     saveW, utype = (args.saveW, args.utype)
     rUUYf = args.rUUYf
     ftag = args.ftag
-    ftag += '-u' + args.utype if args.utype != 'random' else ''
+    if nW > 1 and bootType == 'multiKO':
+        print("Gimenez multi-knockoffs, setting offset=1/nW")
+        offset = 1 / nW
+    else:
+        ftag += '-u' + args.utype if args.utype != 'random' else ''
+        ftag += '-uuyf' if rUUYf else ''
     ftag += '-' + bootType if nW > 1 and utype != 'split' else ''
-    ftag += '-uuyf' if rUUYf else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     ftag += '-es' + str(args.effsize) if args.effsize else ''
     rng = np.random.default_rng(args.seed)

@@ -148,7 +148,10 @@ def get_utheta_fixfrac(Qx, N, p, Y, Rx, tseq=None, target_frac=None, ut1=None):
         ut_other = ut2
     return np.sin(theta) * ut1 + np.cos(theta) * ut_other
 
-def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
+def stat_paired_diff(b2p, p):
+    return np.array([abs(b2p[i]) - abs(b2p[i + p]) for i in range(p)])
+
+def lasso_coef(X, Xk, Y, n_alphas = 100, nfold = 3, copy_X=True):
     p = X.shape[1]
     N = X.shape[0]
     XXk = np.concatenate((X, Xk), axis=1)
@@ -160,9 +163,14 @@ def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
             normalize = False,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
-    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
+    return b
 
-def stat_ridge_coef(X, Xk, Y, n_alphas = 20):
+def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
+    p = X.shape[1]
+    b2p = lasso_coef(X, Xk, Y, n_alphas, nfold, copy_X)
+    return stat_paired_diff(b2p, p)
+
+def ridge_coef(X, Xk, Y, n_alphas=20):
     N, p = X.shape
     XXk = np.concatenate((X, Xk), axis=1)
     cp2p = np.matmul(XXk.T,Y)
@@ -170,9 +178,14 @@ def stat_ridge_coef(X, Xk, Y, n_alphas = 20):
     rfit = RidgeCV(alphas, fit_intercept=False,
                 normalize=False).fit(XXk, Y)
     b = rfit.coef_
-    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
+    return b
 
-def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
+def stat_ridge_coef(X, Xk, Y, n_alphas = 20):
+    p = X.shape[1]
+    b = ridge_coef(X, Xk, Y, n_alphas)
+    return stat_paired_diff(b, p)
+
+def lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     lfit = LassoLarsIC(criterion=criterion,
@@ -181,10 +194,14 @@ def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='a
             eps = 1e-11,
             fit_intercept=False).fit(XXk, Y)
     b = lfit.coef_
-    return np.array([abs(b[i]) - abs(b[i + p]) for i in range(p)])
+    return b
 
+def stat_lassoLarsIC_coef(X, Xk, Y, precompute='auto', copy_X=True, criterion='aic'):
+    p = X.shape[1]
+    b2p = lassoLarsIC_coef(X, Xk, Y, precompute, copy_X, criterion)
+    return stat_paired_diff(b2p, p)
 
-def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
+def ols_coef(X, Xk, Y, G2p=None, cp2p=None):
     p = X.shape[1]
     XXk = np.concatenate((X, Xk), axis=1)
     if G2p is None or cp2p is None:
@@ -197,24 +214,32 @@ def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
         warnings.filterwarnings('error')
         try:
             b = scipy.linalg.solve(left, right)
-            ret = np.array([abs(b[i]) - abs(b[i + p]) for i in  range(p)])
         except: # (scipy.linalg.LinAlgError,    scipy.linalg.LinAlgWarning):
             # b, _, _, _ = scipy.linalg.lstsq(left, right)
             print("singular OLS, returning cross products")
-            aXYcp = np.abs(np.matmul(X.T, Y))
-            aXkYcp = np.abs(np.matmul(Xk.T, Y))
-            ret = np.array(aXYcp - aXkYcp)
-    return ret
+            b = np.concatenate((np.matmul(X.T,Y), np.matmul(Xk.T,Y)))
+            #aXYcp = np.abs(np.matmul(X.T, Y))
+            #aXkYcp = np.abs(np.matmul(Xk.T, Y))
+            #ret = np.array(aXYcp - aXkYcp)
+    return b
 
-def stat_crossprod(X, Xk, Y, cp2p=None):
+def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
+    p = X.shape[1]
+    b2p = ols_coef(X, Xk, Y, G2p, cp2p)
+    return stat_paired_diff(b2p, p)
+
+def crossprod_coef(X, Xk, Y, cp2p=None):
     p = X.shape[1]
     if cp2p is None:
-        aXYcp = np.abs(np.matmul(X.T, Y))
-        aXkYcp = np.abs(np.matmul(Xk.T, Y))
+        b = np.concatenate((np.matmul(X.T,Y),np.matmul(Xk.T,Y)))
     else:
-        aXYcp = np.abs(cp2p[0:p])
-        aXkYcp = np.abs(cp2p[p:(2*p)])
-    return np.array(aXYcp - aXkYcp)
+        b = cp2p
+    return b
+
+def stat_crossprod(X, Xk, Y, cp2p=None):
+    b2p = crossprod_coef(X, Xk, Y, cp2p)
+    p = X.shape[1]
+    return stat_paired_diff(b2p, p)
 
 def knockoff_threshold(Wstat, q, offset):
     Wabs = np.sort(np.abs(Wstat))
@@ -227,49 +252,107 @@ def knockoff_threshold(Wstat, q, offset):
     else:
         return Wabs[np.argmax(ok_pos)]
 
-def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
-            N, p, q, offset,Wfunc,
-            type='bootThresh', tol=1e-10):
-    selmat = []
-    Wmat = []
+def multiKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
+            N, p, q, wstat, tol=1e-10):
+    Tmat = []
+    if wstat == 'ols':
+        bfunc = ols_coef
+    elif wstat == 'ridge':
+        bfunc = ridge_coef
+    elif wstat=='crossprod':
+        bfunc = crossprod_coef
+    elif wstat == 'lasso_coef':
+        bfunc = lasso_coef
+    elif wstat == 'lasso_coefIC':
+        bfunc = lassoLarsIC_coef
+    else:
+        print("unknown wtype, using cross product")
+        bfunc = crossprod_coef
+    # create many knockoff |beta_j|
     for i in range(nrep):
-        Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+        xti = getknockoffs_qr(X, G, svec, Qx, N, p,
                     Utilde = None, Ginv=Ginv, Cmat=Cmat,
                     tol=tol)
-        W = Wfunc(X, Xtilde, Y)
-        Wmat.append(W)
-        thresh = knockoff_threshold(W, q, offset)
-        sel_i = np.array([W[j] >= thresh for j in range(p)])
-        selmat.append(sel_i)
-    selmat = np.array(selmat)
-    Wmat = np.array(Wmat)
-    sel_consensus = np.repeat(False, p)
-    if type == 'avg_nsel':
-        ranksel = np.argsort(np.sum(selmat, axis=0))
-        avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
-        if avg_nsel >= 1:
-            sel_consensus[ranksel[-avg_nsel:]] = True
+        b = bfunc(X, xti, Y)
+        Tmat.append(np.abs(b[p:]))
+    # store the |beta_j| for the original variables
+    # from one of the _nrep_ fits
+    Tmat.append(np.abs(b[0:p]))
+    Tmat = np.array(Tmat) # nrep + 1 by p
+    ot = np.argsort(Tmat, axis=0)
+    kappa = ot[nrep, :] # indices of the largest magnitudes
+    Tsort = np.take_along_axis(Tmat, ot, axis=0)
+    tau = Tsort[nrep, :] - Tsort[nrep - 1, :]
+    # each row is a threshold
+    checktau = [[tau_j >= t for tau_j in tau] for t in tau]
+    # true means orig. coef not the largest among
+    #   the (k+1) knockoffs + original coefficients
+    # i.e. true suggests false discovery
+    kbad = [ki <= (nrep - 1) for ki in kappa]
+    # true means that the original variable's coefficient
+    #   was the largest magnitude coefficient
+    ktop = [not kj for kj in kbad]
+    numer = [[ktj and ctj for (ktj, ctj) in zip(kbad,  cur_thresh)] for cur_thresh in checktau]
+    denom = [[ktj and ctj for (ktj, ctj) in zip(ktop,  cur_thresh)] for cur_thresh in checktau]
+    numer = np.array(numer)
+    denom = np.array(denom)
+    denom_final = np.maximum(np.sum(denom, axis=1),np.repeat(1,p))
+    numer_final = (1/nrep) + (1/nrep) * np.sum(numer,axis=1)
+    tau[numer_final / denom_final <= q]
+    ltq = tau[numer_final / denom_final <= q]
+    if len(ltq) > 0:
+        thresh = np.min(tau[numer_final / denom_final <= q])
     else:
-        ngrid = 20
-        wmax = np.max(Wmat)
-        testThresh = np.linspace(1e-7, wmax, ngrid)
-        tmax = 1e-6
-        prevMax = wmax # prevMax will decrease
-        while (abs(prevMax - tmax) / prevMax) > 1e-4:
-            bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
-            bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
-            anyLess = (bootNumer / bootDenom) <= q
-            if np.sum(anyLess) < 1:
-                tmax = np.inf
-                break
-            tix = np.argmax(anyLess)
-            prevMax = tmax
-            tmax = testThresh[tix]
-            testThresh = np.linspace(testThresh[max(0, tix-2)], tmax, ngrid)
-        cutoff_ix = int(np.round(np.mean(np.sum(Wmat >= tmax, axis=1))))
-        ranksel = np.argsort(np.mean(Wmat >= tmax, axis=0))
-        if cutoff_ix > 0:
-            sel_consensus[ranksel[-cutoff_ix:]] = True
+        thresh = float('Inf')
+    sel = np.logical_and(tau >= thresh, ktop)
+    return sel
+
+def bootKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx,
+            N, p, q, offset, Wfunc, wstat='lasso_coefIC',
+            type='bootThresh', tol=1e-10):
+    if type == 'multiKO':
+        sel_consensus = multiKO(nrep, X, Y, G, Ginv, Cmat, svec, Qx, N, p, q, wstat, tol)
+    else:
+        selmat = []
+        Wmat = []
+        for i in range(nrep):
+            Xtilde = getknockoffs_qr(X, G, svec, Qx, N, p,
+                        Utilde = None, Ginv=Ginv, Cmat=Cmat,
+                        tol=tol)
+            W = Wfunc(X, Xtilde, Y)
+            Wmat.append(W)
+            thresh = knockoff_threshold(W, q, offset)
+            sel_i = np.array([W[j] >= thresh for j in range(p)])
+            selmat.append(sel_i)
+        selmat = np.array(selmat)
+        Wmat = np.array(Wmat)
+        sel_consensus = np.repeat(False, p)
+        if type == 'avg_nsel':
+            ranksel = np.argsort(np.sum(selmat, axis=0))
+            avg_nsel = int(np.round(np.mean(np.sum(selmat, axis=1))))
+            if avg_nsel >= 1:
+                sel_consensus[ranksel[-avg_nsel:]] = True
+        else:
+            ngrid = 20
+            wmax = np.max(Wmat)
+            testThresh = np.linspace(1e-7, wmax, ngrid)
+            tmax = 1e-6
+            prevMax = wmax # prevMax will decrease
+            while (abs(prevMax - tmax) / prevMax) > 1e-4:
+                bootNumer = np.array([np.mean(np.sum(Wmat <= -tj, axis=1)) for tj in testThresh])
+                bootDenom = np.array([np.mean(np.sum(Wmat >= tj, axis=1)) for tj in testThresh])
+                anyLess = (bootNumer / bootDenom) <= q
+                if np.sum(anyLess) < 1:
+                    tmax = np.inf
+                    break
+                tix = np.argmax(anyLess)
+                prevMax = tmax
+                tmax = testThresh[tix]
+                testThresh = np.linspace(testThresh[max(0, tix-2)], tmax, ngrid)
+            cutoff_ix = int(np.round(np.mean(np.sum(Wmat >= tmax, axis=1))))
+            ranksel = np.argsort(np.mean(Wmat >= tmax, axis=0))
+            if cutoff_ix > 0:
+                sel_consensus[ranksel[-cutoff_ix:]] = True
     return sel_consensus
 
 def doKnockoffSplitSample(X, Y, q, nU = 100, offset=1,
@@ -397,7 +480,8 @@ def doKnockoff(X, Y, q, offset=1,
     elif wstat == 'lasso_coefIC':
         Wfunc = stat_lassoLarsIC_coef
     else:
-        print("unknown wtype, using cross product")
+        print("unknown wstat, using cross product")
+        wstat = 'crossprod'
         Wfunc = stat_crossprod
     if nrep < 2:
         if Utilde is None:
@@ -427,11 +511,11 @@ def doKnockoff(X, Y, q, offset=1,
         else:
             sel = bootKO(nrep, X, Y, G, Ginv, Cmat, svec,
                     Qx, N, p, q,
-                    offset, Wfunc,
+                    offset, Wfunc, wstat,
                     type=bootType, tol=tol)
     if returnW and (nrep < 2 or utype=='split'):
         return sel, W
-    elif rUUYf:
+    elif rUUYf and nrep < 2:
         uuy2 = np.sum(np.matmul(Utilde.T,Y)**2)
         yn2 = np.sum(Y**2)
         uuyf = uuy2 / yn2
