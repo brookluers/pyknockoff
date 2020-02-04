@@ -10,7 +10,8 @@ np.set_printoptions(precision=5, suppress=True)
 
 sfunc_d = {
     'equi': ko.get_svec_equi,
-    'ldet': ko.get_svec_ldet
+    'ldet': ko.get_svec_ldet,
+    'sdp': ko.get_svec_sdp
 }
 
 def get_Sigma(corstr, p, k, rho):
@@ -191,7 +192,7 @@ if __name__ == "__main__":
             default=['crossprod', 'lasso_coefIC'])
     parser.add_argument("-stype", nargs='+',
             help="s_1..s_p tuning",
-            choices=['ldet','equi'],
+            choices=['ldet','equi', 'sdp'],
             default=['equi','ldet'])
     parser.add_argument("-utype", help='type of utilde matrix',
             choices=['random','varfrac','runif', 'fixed', 'split'], default='random')
@@ -199,6 +200,8 @@ if __name__ == "__main__":
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
     parser.add_argument('-rUUYf', help='save ||UUY||^2/||Y||^2?',
+        type=bool, default=False)
+    parser.add_argument('-fixGram', help='fix X^t X',
         type=bool, default=False)
     parser.add_argument('-ftag', help='append to output file name',
         default='')
@@ -208,6 +211,7 @@ if __name__ == "__main__":
         default='bootThresh', choices=['bootThresh','avg_nsel','multiKO'])
     args = parser.parse_args()
     N, p, k, rho= (args.N, args.p, args.k, args.rho)
+    fixGram = args.fixGram
     offset, corstr, FDR, es = (args.offset, args.corstr, args.fdr, args.effsize)
     wtypes, stypes, betatype = (args.wtype, args.stype, args.btype)
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
@@ -236,4 +240,5 @@ if __name__ == "__main__":
                 betatype = betatype,
                 stypes = stypes, wtypes = wtypes,
                 utype = utype , bootType=bootType,
+                 fixGram = fixGram,
                 saveW=saveW, tag=ftag, rUUYf = rUUYf)

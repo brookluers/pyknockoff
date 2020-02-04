@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds, check_grad, approx_fprime
 import scipy.linalg
+import cvxpy as cp
 import warnings
 from sklearn.linear_model import LassoCV
 from sklearn.linear_model import RidgeCV
@@ -40,6 +41,15 @@ def get_ldetgrad(Sigma):
         return 1.0 / svec - np.diag(Winv)
     return f
 
+def get_svec_sdp(G, minEV = None):
+    p = G.shape[0]
+    s = cp.Variable(p)
+    objective = cp.Minimize(cp.sum(1 - s))
+    sdcon = (2 * G - cp.diag(s) >> 0)
+    constraints = [0 <= s, s <= 1, sdcon]
+    prob = cp.Problem(objective, constraints)
+    prob.solve(solver=cp.CVXOPT)
+    return s.value
 
 def get_svec_equi(G, minEV = None):
     if minEV is None:
@@ -394,6 +404,9 @@ def doKnockoffSplitSample(X, Y, q, nU = 100, offset=1,
     elif stype == 'equi':
         sv1 = get_svec_equi(G1)
         sv2 = get_svec_equi(G2)
+    elif stype == 'sdp':
+        sv1 = get_svec_sdp(G1)
+        sv2 = get_svec_sdp(G2)
     else:
         sv1 = get_svec_ldet(G1)
         sv2 = get_svec_ldet(G2)
@@ -465,6 +478,8 @@ def doKnockoff(X, Y, q, offset=1,
             svec = get_svec_ldet(G)
         elif stype == 'equi':
             svec = get_svec_equi(G)
+        elif stype == 'sdp':
+            svec = get_svec_sdp(G)
         else:
             svec = get_svec_ldet(G)
     if Cmat is None:
