@@ -461,7 +461,8 @@ def doKnockoff(X, Y, q, offset=1,
                 Cmat=None,
                 tol=1e-10, returnW = False,
                 bootType = 'bootThresh',
-                rUUYf = False):
+                rUUYf = False,
+                returnS = False):
     N, p = X.shape
     if center:
         xmeans = np.mean(X, axis=0)
@@ -535,6 +536,8 @@ def doKnockoff(X, Y, q, offset=1,
         yn2 = np.sum(Y**2)
         uuyf = uuy2 / yn2
         return sel, np.array([uuyf])
+    elif returnS:
+        return sel, svec
     else:
         return sel
 

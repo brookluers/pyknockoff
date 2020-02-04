@@ -62,7 +62,7 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
             utype = 'random', bootType='bootThresh',
             scale=True, center=True,
              fixGram = False, to_csv = True, tag='',
-             saveW = False, rUUYf = False):
+             saveW = False, rUUYf = False, saveSj=False):
     # Use power iterations to approximate
     # the smallest eigenvalue of X^t X
     # use for log-det and equivariant
@@ -77,6 +77,8 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
     bfn += '-' + tag
     if saveW:
         bfn += '-saveW'
+    if saveSj:
+        bfn += '-sj'
     bfn += '.csv'
     bdf = pd.DataFrame({'beta_j': beta, 'j': np.arange(p)})
     bdf.to_csv(bfn, index = False)
@@ -99,9 +101,11 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
         print("Warning: offset is not zero or one, offset = " + str(offset))
     print("true effects = \n\t" + str(beta))
     print("cov(X)[0:5, 0:5]: \t" + str(Sigma[0:5,0:5]).replace('\n','\n\t\t\t'))
-
     vheader = ['jx','jyx','juyx', 'fdp', 'tpr', 'fpr', 'ppv']
     vheader.extend(["sel{:d}".format(i) for i in range(p)])
+    if saveSj:
+        print("saving sj tuning parameters")
+        vheader.extend(["sj{:d}".format(i) for i in range(p)])
     if rUUYf:
         if saveW:
             print("cannot save W when returning ||UUY^2||/||Y||^2, ignoring saveW")
@@ -141,9 +145,9 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
                     scale=False, center=False,
                     utype=utype, nrep=nW,
                     Qx=Qx, Rx=Rx, Ginv=Ginv, G=G,
-                    Cmat=cm, returnW=saveW, bootType=bootType, rUUYf=rUUYf
+                    Cmat=cm, returnW=saveW, bootType=bootType, rUUYf=rUUYf, returnS = saveSj
                     ) for wstat in wtypes for (svec, cm) in zip(slist, cmlist) ]
-                if saveW or rUUYf:
+                if saveW or rUUYf or saveSj:
                     rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]),1 * s, w, ix)) for ((s, w), ix) in zip(selWlist, sw_ix)])
                 else:
                     rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]), 1 * s, ix)) for (s, ix) in zip(selWlist, sw_ix)])
@@ -199,6 +203,7 @@ if __name__ == "__main__":
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-saveW', help='save W statistics?',
         type=bool, default=False)
+    parser.add_argument('-saveSj', help='save sj parameters?', type=bool, default=False)
     parser.add_argument('-rUUYf', help='save ||UUY||^2/||Y||^2?',
         type=bool, default=False)
     parser.add_argument('-fixGram', help='fix X^t X',
@@ -217,17 +222,24 @@ if __name__ == "__main__":
     nsim_x, nsim_yx, nsim_uyx, nW = (args.nsim_x, args.nsim_yx, args.nsim_uyx, args.nW)
     bootType = args.bootType
     saveW, utype = (args.saveW, args.utype)
+    saveSj = args.saveSj
     rUUYf = args.rUUYf
     ftag = args.ftag
+    if saveSj:
+        print("saving Sj, ignoring saveW, rUUYf")
+        saveW = False
+        rUUYf = False
     if nW > 1 and bootType == 'multiKO':
         print("Gimenez multi-knockoffs, setting offset=1/nW")
         offset = 1 / nW
     else:
         ftag += '-u' + args.utype if args.utype != 'random' else ''
         ftag += '-uuyf' if rUUYf else ''
+    ftag += '-sj' if saveSj else ''
     ftag += '-' + bootType if nW > 1 and utype != 'split' else ''
     ftag += '-seed' + str(args.seed) if args.seed else ''
     ftag += '-es' + str(args.effsize) if args.effsize else ''
+
     rng = np.random.default_rng(args.seed)
     ko.rng = rng
     gen.rng = rng
@@ -241,4 +253,4 @@ if __name__ == "__main__":
                 stypes = stypes, wtypes = wtypes,
                 utype = utype , bootType=bootType,
                  fixGram = fixGram,
-                saveW=saveW, tag=ftag, rUUYf = rUUYf)
+                saveW=saveW, tag=ftag, rUUYf = rUUYf, saveSj = saveSj)
