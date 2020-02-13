@@ -5,6 +5,7 @@ import cvxpy as cp
 import warnings
 from sklearn.linear_model import LassoCV
 from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import Ridge
 from sklearn.linear_model import LassoLarsIC
 
 rng = np.random.default_rng()
@@ -183,10 +184,17 @@ def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
 def ridge_coef(X, Xk, Y, n_alphas=20):
     N, p = X.shape
     XXk = np.concatenate((X, Xk), axis=1)
-    cp2p = np.matmul(XXk.T,Y)
-    alphas = get_alphas_lasso(cp2p, n_alphas, N)
-    rfit = RidgeCV(alphas, fit_intercept=False,
-                normalize=False).fit(XXk, Y)
+    G = np.matmul(X.T, X)
+    #cp2p = np.matmul(XXk.T,Y)
+    # alphas = get_alphas_lasso(cp2p, n_alphas, N)
+    #rfit = RidgeCV(alphas, fit_intercept=False,
+    #            normalize=False).fit(XXk, Y)
+    minEV= scipy.linalg.eigvalsh(G, eigvals=(0,0))[0]
+    q, _ = np.linalg.qr(XXk, mode='reduced')
+    sig2hat = np.sum((Y-np.matmul(q, np.matmul(q.T, Y)))**2) /(N - 2*p)
+    alpha = sig2hat / minEV
+    # print("ridge alpha = " + str(alpha))
+    rfit = Ridge(alpha, fit_intercept=False,normalize=False).fit(XXk,Y)
     b = rfit.coef_
     return b
 
@@ -226,8 +234,9 @@ def ols_coef(X, Xk, Y, G2p=None, cp2p=None):
             b = scipy.linalg.solve(left, right)
         except: # (scipy.linalg.LinAlgError,    scipy.linalg.LinAlgWarning):
             # b, _, _, _ = scipy.linalg.lstsq(left, right)
-            print("singular OLS, returning cross products")
-            b = np.concatenate((np.matmul(X.T,Y), np.matmul(Xk.T,Y)))
+            print("singular OLS, returning zeros")
+            #b = np.concatenate((np.matmul(X.T,Y), np.matmul(Xk.T,Y)))
+            b = np.repeat(0, 2*p)
             #aXYcp = np.abs(np.matmul(X.T, Y))
             #aXkYcp = np.abs(np.matmul(Xk.T, Y))
             #ret = np.array(aXYcp - aXkYcp)
