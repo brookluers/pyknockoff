@@ -132,21 +132,24 @@ def kosim(nsim_x, nsim_yx, nsim_uyx, N, p, k, rho,
         X = genXfunc(N, p, SigmaChol, scale, center)
         Qx, Rx = np.linalg.qr(X, mode='reduced')
         G = np.matmul(Rx.T, Rx) # = X^t X
+        #ldf = ko.get_ldetfun(G)
         Ginv = np.linalg.inv(G)
         minEV = 1 / power_method(Ginv, p, startvec = start_unit, niter = 30)
         slist = [sfunc_d[stype](G, minEV = minEV) for stype in stypes]
-        cmlist = [ko.get_cmat(X, sv, Ginv) for sv in slist]
+        cmlist = [ko.get_cmat(X, sv, G, Ginv) for sv in slist]
+        #ldetlist = [ldf(sj) for sj in slist]
+        #print("ldet vals: " + str([stj + str(ldj) for (stj,ldj) in zip(stypes,ldetlist)]))
         for jyx in range(nsim_yx): # Generate Y | X
             Y = gen.gen_Y(X, N, beta)
             for juyx in range(nsim_uyx):
                 # Generate Utilde | X, Y
                 selWlist = [  ko.doKnockoff(
-                    X, Y, FDR, offset=offset, svec=svec, wstat=wstat,
+                    X, Y, FDR, offset=offset, stype=stype, svec=svec, wstat=wstat,
                     scale=False, center=False,
                     utype=utype, nrep=nW,
                     Qx=Qx, Rx=Rx, Ginv=Ginv, G=G,
                     Cmat=cm, returnW=saveW, bootType=bootType, rUUYf=rUUYf, returnS = saveSj
-                    ) for wstat in wtypes for (svec, cm) in zip(slist, cmlist) ]
+                    ) for wstat in wtypes for (stype, svec, cm) in zip(stypes, slist, cmlist) ]
                 if saveW or rUUYf or saveSj:
                     rslt.extend([np.concatenate((np.array([jx,jyx,juyx,fdp(s), tpr(s), fpr(s), ppv(s)]),1 * s, w, ix)) for ((s, w), ix) in zip(selWlist, sw_ix)])
                 else:

@@ -193,7 +193,6 @@ def ridge_coef(X, Xk, Y, n_alphas=20):
     q, _ = np.linalg.qr(XXk, mode='reduced')
     sig2hat = np.sum((Y-np.matmul(q, np.matmul(q.T, Y)))**2) /(N - 2*p)
     alpha = sig2hat / minEV
-    # print("ridge alpha = " + str(alpha))
     rfit = Ridge(alpha, fit_intercept=False,normalize=False).fit(XXk,Y)
     b = rfit.coef_
     return b
@@ -231,15 +230,10 @@ def ols_coef(X, Xk, Y, G2p=None, cp2p=None):
     with warnings.catch_warnings():
         warnings.filterwarnings('error')
         try:
-            b = scipy.linalg.solve(left, right)
-        except: # (scipy.linalg.LinAlgError,    scipy.linalg.LinAlgWarning):
-            # b, _, _, _ = scipy.linalg.lstsq(left, right)
-            print("singular OLS, returning zeros")
-            #b = np.concatenate((np.matmul(X.T,Y), np.matmul(Xk.T,Y)))
+            b = np.linalg.solve(left, right)
+        except:
+            print("\tsingular OLS, returning zeros")
             b = np.repeat(0, 2*p)
-            #aXYcp = np.abs(np.matmul(X.T, Y))
-            #aXkYcp = np.abs(np.matmul(Xk.T, Y))
-            #ret = np.array(aXYcp - aXkYcp)
     return b
 
 def stat_ols(X, Xk, Y, G2p = None, cp2p = None):
@@ -557,7 +551,6 @@ def get_cmat(X, svec, G=None, Ginv=None, tol=1e-7):
     CtC = Ginv * -np.outer(svec, svec)   # - S Ginv S
     i, j = np.diag_indices(Ginv.shape[0])
     CtC[i, j] += 2 * svec
-    # CtC_old = 2 * Smat - np.matmul(Smat, Ginv_S)
     w, v = scipy.linalg.eigh(CtC)
     w[w < tol] = 0
     Cmat = np.sqrt(w)[:, None] * v.T
@@ -571,6 +564,6 @@ def getknockoffs_qr(X, G, svec, Qx,
     if Ginv is None:
         Ginv = scipy.linalg.inv(G)
     if Cmat is None:
-        Cmat = get_cmat(X, svec, Ginv)
+        Cmat = get_cmat(X, svec, G=G, Ginv=Ginv)
     Ginv_S = Ginv * svec
     return X - np.matmul(X, Ginv_S) + np.matmul(Utilde, Cmat)
