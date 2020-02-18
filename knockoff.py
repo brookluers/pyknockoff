@@ -10,6 +10,12 @@ from sklearn.linear_model import LassoLarsIC
 
 rng = np.random.default_rng()
 
+def get_alphas_ridge(cp2p, n_alphas, N, eps=1e-5):
+    alpha_max = np.max(np.abs(cp2p)) / (N*eps)
+    alpha_min = alpha_max/1000
+    k = np.linspace(0, n_alphas - 1, n_alphas) / n_alphas
+    return alpha_max * (alpha_min / alpha_max)**k
+    
 def get_alphas_lasso(cp2p, n_alphas, N):
     alpha_max = np.max(np.abs(cp2p)) / N
     alpha_min = alpha_max / 1000
@@ -181,23 +187,18 @@ def stat_lasso_coef(X, Xk, Y, n_alphas = 100, nfold=3, copy_X = True):
     b2p = lasso_coef(X, Xk, Y, n_alphas, nfold, copy_X)
     return stat_paired_diff(b2p, p)
 
-def ridge_coef(X, Xk, Y, n_alphas=20):
+def ridge_coef(X, Xk, Y, n_alphas=100):
     N, p = X.shape
     XXk = np.concatenate((X, Xk), axis=1)
     G = np.matmul(X.T, X)
-    #cp2p = np.matmul(XXk.T,Y)
-    # alphas = get_alphas_lasso(cp2p, n_alphas, N)
-    #rfit = RidgeCV(alphas, fit_intercept=False,
-    #            normalize=False).fit(XXk, Y)
-    minEV= scipy.linalg.eigvalsh(G, eigvals=(0,0))[0]
-    q, _ = np.linalg.qr(XXk, mode='reduced')
-    sig2hat = np.sum((Y-np.matmul(q, np.matmul(q.T, Y)))**2) /(N - 2*p)
-    alpha = sig2hat / minEV
-    rfit = Ridge(alpha, fit_intercept=False,normalize=False).fit(XXk,Y)
+    cp2p = np.matmul(XXk.T,Y)
+    alphas = get_alphas_ridge(cp2p, n_alphas, N)
+    rfit = RidgeCV(alphas, fit_intercept=False,
+                normalize=False).fit(XXk, Y)
     b = rfit.coef_
     return b
 
-def stat_ridge_coef(X, Xk, Y, n_alphas = 20):
+def stat_ridge_coef(X, Xk, Y, n_alphas = 30):
     p = X.shape[1]
     b = ridge_coef(X, Xk, Y, n_alphas)
     return stat_paired_diff(b, p)
@@ -230,7 +231,10 @@ def ols_coef(X, Xk, Y, G2p=None, cp2p=None):
     with warnings.catch_warnings():
         warnings.filterwarnings('error')
         try:
-            b = np.linalg.solve(left, right)
+            # b = np.linalg.solve(left, right)
+            b, _, rnk, _ = scipy.linalg.lstsq(XXk, Y, 1e-4)
+            #print("b = " + str(b))
+            #print("lstsq rnk = " + str(rnk))
         except:
             print("\tsingular OLS, returning zeros")
             b = np.repeat(0, 2*p)
