@@ -30,6 +30,13 @@ def get_fprfunc(beta, tol=1e-8):
         return np.sum(abs_beta[sel] < tol) / (np.sum(abs_beta[sel] < tol) + p - k)
     return f
 
+def get_fwefunc(beta, tol=1e-8):
+    abs_beta = np.abs(beta)
+    p = beta.shape[0]
+    def f(sel):
+        return np.sum(np.sum(abs_beta[sel] < tol) > 0)
+    return f
+
 def get_exch(p, rho):
     ret = np.eye(p)
     ret[np.tril_indices(p, -1)] = rho

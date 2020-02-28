@@ -15,7 +15,7 @@ def bhPvals(x, q):
     rej[rej_ix] = True
     return rej
 
-def bhOLSReg(X, Y, q):
+def olsPvals(X, Y):
     n, p = X.shape
     Qx, Rx = np.linalg.qr(X, mode='reduced')
     QtY = np.matmul(Qx.T, Y)
@@ -26,4 +26,18 @@ def bhOLSReg(X, Y, q):
     bse = np.sqrt(sig2hat) * np.linalg.norm(Rinv, axis=1)
     ts = bhat / bse
     pvals = 2 * (1.0 - scipy.stats.t.cdf(np.abs(ts), df=n-p))
-    return bhPvals(pvals, q)
+    return pvals
+
+def bonfOLSReg(X, Y, q):
+    N, p = X.shape
+    sel = None
+    pvals = olsPvals(X, Y)
+    sel = pvals <= (q / p)
+    return sel
+
+def bhOLSReg(X, Y, q, nboot=1):
+    N, p = X.shape
+    sel = None
+    pvals = olsPvals(X, Y)
+    sel = bhPvals(pvals, q)
+    return sel
