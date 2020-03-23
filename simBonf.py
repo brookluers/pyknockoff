@@ -129,7 +129,8 @@ if __name__ == "__main__":
     betatype = args.btype
     nsim_x, nsim_yx = (args.nsim_x, args.nsim_yx)
     ftag = args.ftag
-    ftag += 'seed' + str(args.seed) if args.seed else ''
+    ftag += '-seed' + str(args.seed) if args.seed else ''
+    ftag += '-es' + str(es) if args.effsize else ''
     rng = np.random.default_rng(args.seed)
     bh.rng = rng
     gen.rng = rng

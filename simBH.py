@@ -36,7 +36,6 @@ def get_beta(betatype, p, k, effsize):
         beta = gen.rand_beta_flat(p, k, effsize)
     return beta
 
-
 def bhsim(nsim_x, nsim_yx, N, p, k, rho,
             effsize, nboot = 1, FDR = 0.1, corstr='exch',
             betatype = 'flat',
@@ -78,25 +77,12 @@ def bhsim(nsim_x, nsim_yx, N, p, k, rho,
     pddtypes = {'nboot': int, 'jx': int, 'jyx': int, 'p':int,'k':int,'N':int,
         **{'sel{:d}'.format(i): int for i in range(p)}}
     rslt = []
-    ixN = np.arange(N)
     for jx in range(nsim_x):
         X = genXfunc(N, p, SigmaChol, scale, center)
+        print("X^t X[0:5, 0:5] = " + str(np.matmul(X.T,X)[0:5,0:5]).replace('\n','\n\t\t\t'))
         for jyx in range(nsim_yx): # Generate Y | X
             Y = gen.gen_Y(X, N, beta)
-            if nboot < 2:
-                sel = bh.bhOLSReg(X,Y,FDR)
-            else:
-                selmat = []
-                for i in range(nboot):
-                    ixb = rng.choice(ixN, size=N, replace=True)
-                    selmat.append(bh.bhOLSReg(X[ixb,:], Y[ixb], FDR))
-                selmat = np.array(selmat)
-                avg_nsel = int(np.round(np.mean(np.sum(selmat,axis=1))))
-                sel_consensus = np.repeat(False, p)
-                if avg_nsel >= 1:
-                    ranksel = np.argsort(np.sum(selmat, axis=0))
-                    sel_consensus[ranksel[-avg_nsel:]] = True
-                sel = sel_consensus
+            sel = bh.bhOLSReg(X, Y, FDR, nboot=nboot)
             rslt.extend([np.concatenate((np.array([jx,jyx,fdp(sel), tpr(sel), fpr(sel), ppv(sel)]), 1 * sel))])
     rslt = np.array(rslt)
     rslt = np.concatenate((rslt, np.broadcast_to(gparm, (rslt.shape[0],len(gparm)))), axis=1)
@@ -134,6 +120,8 @@ if __name__ == "__main__":
     parser.add_argument("-effsize", help="mangitude of true effects",
     type=float, default=3.5)
     parser.add_argument("-nsim_yx", help="num. Y | X monte carlo reps", type=int, default=1)
+    parser.add_argument('-fixGram', help='fix X^t X',
+        type=bool, default=False)
     parser.add_argument('-seed', help='rng seed', type=int)
     parser.add_argument('-ftag', help='append to output file name',
         default='')
@@ -141,11 +129,13 @@ if __name__ == "__main__":
         default='flat', choices=['flat','first_k','seq'])
     args = parser.parse_args()
     N, p, k, rho= (args.N, args.p, args.k, args.rho)
+    fixGram = args.fixGram
     corstr, FDR, es = (args.corstr, args.fdr, args.effsize)
     betatype = args.btype
     nsim_x, nsim_yx, nboot = (args.nsim_x, args.nsim_yx, args.nboot)
     ftag = args.ftag
-    ftag += 'seed' + str(args.seed) if args.seed else ''
+    ftag += '-seed' + str(args.seed) if args.seed else ''
+    ftag += '-es' + str(es) if args.effsize else ''
     rng = np.random.default_rng(args.seed)
     bh.rng = rng
     gen.rng = rng
@@ -153,4 +143,4 @@ if __name__ == "__main__":
     rslt = bhsim(nsim_x=nsim_x, nsim_yx=nsim_yx,
                 N=N, p=p, k=k, rho=rho,
                 effsize=es, nboot=nboot, FDR=FDR, corstr=corstr,
-                betatype = betatype, tag=ftag, rng=rng)
+                betatype = betatype, tag=ftag, fixGram = fixGram, rng=rng)
